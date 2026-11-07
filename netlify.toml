@@ -2,7 +2,8 @@
   publish = "."
   functions = "netlify/functions"
   # Sin paso de build en Netlify: assets/ ya viene construido en el repositorio (para regenerarlo: npm install && npm run build).
-
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "FIREBASE_API_KEY,FIREBASE_PROJECT_ID"
 [[headers]]
   for = "/service-worker.js"
   [headers.values]
