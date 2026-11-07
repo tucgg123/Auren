@@ -262,6 +262,18 @@ function superaLimite(uid) {
 
 // Hecho por Sebastián Poveda y Santiago Romero. 2026 · punto de entrada de la función
 exports.handler = async (event) => {
+  // Diagnóstico: GET ?diagnostico=1 dice qué variables de entorno están definidas (nunca sus valores) y a qué proyecto apunta.
+  if (event.httpMethod === 'GET' && event.queryStringParameters && event.queryStringParameters.diagnostico) {
+    return json(200, {
+      variables: {
+        APIKEYGEMINIS: !!process.env.APIKEYGEMINIS,
+        FIREBASE_API_KEY: !!FIREBASE_API_KEY,
+        FIREBASE_PROJECT_ID: !!PROYECTO,
+        FIREBASE_SERVICE_ACCOUNT: !!process.env.FIREBASE_SERVICE_ACCOUNT
+      },
+      proyecto: PROYECTO || null
+    });
+  }
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Método no permitido.' });
   }

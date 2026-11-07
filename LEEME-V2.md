@@ -8,6 +8,7 @@ Esta versión es un proyecto **aparte** de la que ya funciona para los estudiant
 - **Profesor**: semestre y curso al crear la materia; imágenes y videos (enlace) en los temas; comprimir PDF pesados; exámenes dinámicos (cada estudiante recibe un subconjunto distinto del banco) con dificultad y preguntas de opción múltiple, verdadero/falso y completar; Excel con fórmulas y formato.
 - **Estudiante**: lector de voz, "Mis apuntes" privados, reloj Pomodoro (25/5 editable), los exámenes del profesor suman a la racha, cronómetro fijo en los exámenes con tiempo. La sección "Estudiar" está arriba de los cortes.
 - **Admin**: panel para asignar roles y borrar cuentas. Cualquiera puede borrar su propia cuenta desde el Perfil.
+- **Inicio con carpetas de semestre**: cada semestre es una carpeta (promedio, materias y apuntes); al abrirla se ve una página del semestre con dos cajones: 1 Materias y 2 Mis apuntes por materia. La dirección es `#/semestre/ID`.
 - Logo nuevo.
 
 ## Puesta en marcha (en este orden)
@@ -32,7 +33,12 @@ git add -A && git commit -m "mensaje" && git push
 ```
 Netlify publica la carpeta tal cual (no ejecuta el build).
 
+## Si la IA da error al subir un archivo
+- Si sale "La función de IA no respondió…", la propia página te dice qué falta (por ejemplo `FIREBASE_PROJECT_ID`) o a qué proyecto apunta Netlify. Corrígelo en *Site configuration → Environment variables* y **vuelve a desplegar** (*Deploys → Trigger deploy*): las funciones solo leen las variables al desplegarse.
+- Para comprobarlo a mano abre `https://TU-SITIO.netlify.app/.netlify/functions/generar-tema?diagnostico=1`: muestra qué variables existen (sí/no, nunca sus valores) y el proyecto al que apunta.
+
 ## Cosas que conviene saber
+- En cada materia, el estudiante tiene un tablero de apuntes tipo post-it (con título) y, dentro de cada tema, una pestaña "Mis apuntes". Ambos son privados.
 - Las imágenes de los temas se guardan comprimidas en Firestore (hasta ~700 KB cada una, máximo 12 imágenes o videos por tema). Los videos son enlaces; se incrustan los de YouTube y Vimeo.
 - El PDF comprimido pierde el texto seleccionable (la IA siempre lee el original). Es una copia para guardar o descargar.
 - Los apuntes de los estudiantes son privados: ni el profesor ni un admin pueden leerlos (las reglas no lo permiten).

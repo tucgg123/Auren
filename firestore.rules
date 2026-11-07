@@ -39,7 +39,8 @@ service cloud.firestore {
     match /anotaciones/{u}/items/{temaId} {
       allow read, delete: if request.auth != null && request.auth.uid == u;
       allow create, update: if request.auth != null && request.auth.uid == u
-        && request.resource.data.keys().hasOnly(['materiaId', 'texto', 'actualizado'])
+        && request.resource.data.keys().hasOnly(['materiaId', 'texto', 'actualizado', 'titulo'])
+        && ( !('titulo' in request.resource.data) || ( request.resource.data.titulo is string && request.resource.data.titulo.size() <= 120 ) )
         && request.resource.data.texto is string && request.resource.data.texto.size() <= 20000
         && request.resource.data.materiaId is string
         && request.resource.data.actualizado is number;

@@ -69,6 +69,9 @@ exports.handler = async (event) => {
       return;
     }
 
+    // Aviso inmediato de que la función arrancó: así la página sabe que sí llegó y no se queda esperando a ciegas.
+    try { await guardar(jobId, token, { estado: 'trabajando' }); } catch (e) { console.error('No se pudo avisar que arrancó (revisa FIREBASE_PROJECT_ID y las reglas de Firestore):', e.message); }
+
     partes = Number.isInteger(cuerpo.pdfPartes) && cuerpo.pdfPartes >= 1 && cuerpo.pdfPartes <= 20 ? cuerpo.pdfPartes : 0;
     let eventoIA = { ...event, httpMethod: 'POST', _limiteMs: LIMITE_BACKGROUND_MS };
     if (partes) {

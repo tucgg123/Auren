@@ -437,7 +437,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)pomoTick()
 const NOTA_MAX=20000;
 const notasMap={},notasPend={},notasTimers={};
 let notasUnsub=null;
-function detenerNotas(){if(notasUnsub){try{notasUnsub()}catch(e){}notasUnsub=null}Object.keys(notasMap).forEach(k=>delete notasMap[k]);Object.keys(notasPend).forEach(k=>delete notasPend[k])}
+function detenerNotas(){notaEditId=null;if(notasUnsub){try{notasUnsub()}catch(e){}notasUnsub=null}Object.keys(notasMap).forEach(k=>delete notasMap[k]);Object.keys(notasPend).forEach(k=>delete notasPend[k])}
 function escucharNotas(){
   detenerNotas();
   if(!currentUid||esProfesor())return;
@@ -466,6 +466,41 @@ function programarNota(id,materiaId,valor){
 }
 function vaciarNotasPendientes(){Object.keys(notasPend).forEach(id=>{clearTimeout(notasTimers[id]);const t=miTema(id);guardarNota(id,t&&t.materiaId)})}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)vaciarNotasPendientes()});
+/* ---- Apuntes por materia (tablero de notas tipo post-it): varias notas con título, solo visibles para su dueño ---- */
+let notaEditId=null;
+const notasDeMateria=mid=>Object.entries(notasMap).filter(([id,d])=>id.startsWith('n_')&&d&&d.materiaId===mid).map(([id,d])=>({id,...d})).sort((a,b)=>(b.actualizado||0)-(a.actualizado||0));
+const colorPostit=id=>[...String(id)].reduce((s,c)=>s+c.charCodeAt(0),0)%3;
+function notasMateriaHTML(m){
+  if(esProfesor()||m.rol!=='estudiante')return '';
+  const lista=notasDeMateria(m.id),ed=notaEditId&&notasMap[notaEditId]&&notasMap[notaEditId].materiaId===m.id?notasMap[notaEditId]:null;
+  return `<section class="apuntesSec">
+    <div class="viewhead"><h2>📝 Mis apuntes de la materia</h2><span class="meta">${pluralMv(lista.length,'apunte','apuntes')} · solo tú los ves</span></div>
+    <div class="apForm">
+      <label class="lbl" for="apT-${m.id}">Título</label><input class="fld" id="apT-${m.id}" maxlength="120" placeholder="Ej. Repasar el capítulo 3" value="${esc(ed?ed.titulo||'':'')}">
+      <label class="lbl" for="apX-${m.id}">Apunte</label><textarea class="fld" id="apX-${m.id}" rows="4" maxlength="${NOTA_MAX}" placeholder="Escribe aquí…">${esc(ed?ed.texto:'')}</textarea>
+      <div class="row" style="justify-content:flex-end;margin-top:8px">${ed?'<button type="button" class="sec" data-action="notaCancelar">Cancelar</button>':''}<button type="button" class="pr" data-action="notaGuardar" data-mat="${m.id}">${ed?'Actualizar':'Guardar apunte'}</button></div>
+    </div>
+    ${lista.length?`<div class="postits">${lista.map(n=>`<article class="postit p${colorPostit(n.id)}"><div class="pnx"><button type="button" data-action="notaEditar" data-id="${n.id}" aria-label="Editar apunte" title="Editar">✎</button><button type="button" data-action="notaBorrar" data-id="${n.id}" aria-label="Borrar apunte" title="Borrar">🗑</button></div><h4>${esc(n.titulo||'Sin título')}</h4><p>${esc(n.texto)}</p><time>${esc(fmtFechaHora(n.actualizado))}</time></article>`).join('')}</div>`:'<div class="empty">Todavía no tienes apuntes de esta materia.</div>'}
+  </section>`;
+}
+async function guardarNotaMateria(mid){
+  const ti=$('apT-'+mid),tx=$('apX-'+mid);
+  if(!ti||!tx||!currentUid)return;
+  const texto=tx.value.trim();
+  if(!texto){UI.alerta('Escribe algo en el apunte antes de guardarlo.');return}
+  const id=notaEditId&&notasMap[notaEditId]?notaEditId:'n_'+uid();
+  const d={materiaId:mid,titulo:ti.value.trim().slice(0,120),texto:texto.slice(0,NOTA_MAX),actualizado:Date.now()};
+  try{
+    await db.collection('anotaciones').doc(currentUid).collection('items').doc(id).set(d);
+    notasMap[id]=d;notaEditId=null;ti.value='';tx.value='';toast('✅ Apunte guardado');render(true);          // el repintado conserva lo escrito, por eso se vacía el formulario a mano
+  }catch(e){console.error(e);UI.alerta('No se pudo guardar el apunte'+detalleError(e)+'.')}
+}
+async function borrarNotaMateria(id){
+  const n=notasMap[id];if(!n||!currentUid)return;
+  if(!await UI.confirmar('¿Borrar el apunte "'+(n.titulo||'Sin título')+'"? No se puede deshacer.','Borrar'))return;
+  try{await db.collection('anotaciones').doc(currentUid).collection('items').doc(id).delete();delete notasMap[id];if(notaEditId===id)notaEditId=null;render(true)}
+  catch(e){console.error(e);UI.alerta('No se pudo borrar el apunte'+detalleError(e)+'.')}
+}
 function esquemaTexto(t){
   if(!Array.isArray(t.secciones)||!t.secciones.length)return '';
   return t.secciones.map(sc=>'## '+(sc.title||'Sección')+'\n'+((typeof puntosDe==='function'?puntosDe(sc):[]).map(p=>'- '+p).join('\n'))).join('\n\n');
@@ -980,6 +1015,7 @@ document.querySelectorAll('#mainNav [data-nav]').forEach(b=>b.onclick=()=>{
 const HERRAMIENTAS=['flashcards','memorizar','quiz','examen','escrito','concepto','hoy','falle','repaso','comparar','progreso','referencias'];
 function rutaAHash(r){
   const v=r.view;
+  if(v==='materias'&&r.semId)return '#/semestre/'+r.semId;
   if(v==='materiaDetail'&&r.materiaId)return '#/materia/'+r.materiaId;
   if(v==='tool'&&r.materiaId&&r.tool)return '#/estudio/'+r.tool+'/'+r.materiaId;
   if(v==='docExamen'&&r.materiaId&&r.examId)return '#/examen/'+r.materiaId+'/'+r.examId;
@@ -993,6 +1029,7 @@ function hashARuta(h){
   const a=p[0]||'',b=p[1],c=p[2];
   if(a==='')return{view:'materias',materiaId:null};
   if(['calendario','logros','perfil','docente','admin'].includes(a))return{view:a,materiaId:null};
+  if(a==='semestre'&&b)return{view:'materias',materiaId:null,semId:b};
   if(a==='materia'&&b)return{view:'materiaDetail',materiaId:b};
   if(a==='estudio'&&b&&c&&HERRAMIENTAS.includes(b))return{view:'tool',tool:b,materiaId:c};
   if(a==='examen'&&b&&c)return{view:'docExamen',materiaId:b,examId:c};
@@ -1015,6 +1052,7 @@ function marcarNavSegunRuta(){
 function rutaInicialDesdeHash(){
   reemplazarHash=true;
   const r=hashARuta(location.hash);
+  if(r&&r.view==='materias'&&r.semId&&state.semesters.some(s=>s.id===r.semId&&!s.oculto)&&!esProfesor()){route={view:'materias',materiaId:null,semId:r.semId};return}
   if(!r||r.view==='materias')return;
   if(['calendario','logros','perfil','docente','admin'].includes(r.view)){route={view:r.view,materiaId:null};return}
   const m=r.materiaId&&state.materias.find(x=>x.id===r.materiaId);
@@ -1027,6 +1065,7 @@ async function aplicarHash(){
   if(!r){reemplazarHash=true;r={view:'materias',materiaId:null}}
   const m=r.materiaId?state.materias.find(x=>x.id===r.materiaId):null;
   if(r.materiaId&&!m){reemplazarHash=true;r={view:esProfesor()?'docente':'materias',materiaId:null}}
+  if(r.view==='materias'&&r.semId&&!state.semesters.some(s=>s.id===r.semId&&!s.oculto)){reemplazarHash=true;r={view:'materias',materiaId:null}}
   if(r.view==='tool'){route={view:'tool',tool:r.tool,materiaId:r.materiaId};marcarNavSegunRuta();startTool(r.tool,r.materiaId);return}
   const ex=m&&r.examId?(exMap[m.sharedId]||{})[r.examId]:null;
   if(r.examId&&!ex){reemplazarHash=true;r={view:'materiaDetail',materiaId:r.materiaId}}
@@ -1037,7 +1076,7 @@ async function aplicarHash(){
 }
 window.addEventListener('popstate',aplicarHash);
 function goToView(v){
-  route.view=v;route.materiaId=null;
+  route.view=v;route.materiaId=null;delete route.semId;
   document.querySelectorAll('#mainNav button').forEach(x=>x.classList.toggle('on',x.dataset.nav===v));
   render();
 }
@@ -1178,32 +1217,55 @@ const IC_ARR=SVG_A+'<path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 function pluralMv(n,a,b){return n+' '+(n==1?a:b)}
 
 /* ================= VISTA: MIS MATERIAS ================= */
+/* ---------- Inicio: carpetas de semestre → vista de semestre con cajones numerados ---------- */
+function folderSemestreHTML(sem){
+  const mats=state.materias.filter(m=>m.semesterId===sem.id&&m.rol!=='docente');
+  const p=promSemestre(mats),nAp=mats.reduce((s,m)=>s+notasDeMateria(m.id).length,0);
+  return `<div class="folder" role="button" tabindex="0" data-action="openSemester" data-id="${sem.id}" aria-label="Abrir ${esc(sem.name)}">
+    <span class="fx"><button type="button" class="icon-btn" data-action="renameSemester" data-id="${sem.id}" title="Renombrar semestre" aria-label="Renombrar semestre">${IC_EDIT}</button><button type="button" class="icon-btn del" data-action="delSemester" data-id="${sem.id}" title="Eliminar semestre" aria-label="Eliminar semestre">${IC_DEL}</button></span>
+    <h3>🎓 ${esc(sem.name)}</h3>
+    <div class="meta">${pluralMv(mats.length,'materia','materias')}${nAp?' · '+pluralMv(nAp,'apunte','apuntes'):''}</div>
+    <div class="favg"><b>${p==null?'–':fmtN(p)}</b><span>${p==null?'sin notas':'promedio'}</span></div>
+    <div class="fchips">${mats.slice(0,3).map(m=>`<span class="fchip">${esc(m.name)}</span>`).join('')}${mats.length>3?`<span class="fchip">+${mats.length-3}</span>`:''}</div>
+  </div>`;
+}
+const dwAbierto=n=>{ui.semDr=ui.semDr||{1:true,2:false};return !!ui.semDr[n]};
+function dwHTML(n,titulo,sub,cuerpo){
+  const ab=dwAbierto(n);
+  return `<section class="dw${ab?' open':''}" data-dw="${n}">
+    <button type="button" class="dwHead" data-action="toggleDw" data-n="${n}" aria-expanded="${ab}" aria-controls="dwB${n}"><span class="dnum">${n}</span><span class="dwT"><b>${titulo}</b><small>${sub}</small></span><span class="chev" aria-hidden="true">▼</span></button>
+    <div class="dwBody" id="dwB${n}"><div class="dwInner"><div class="dwPad">${cuerpo}</div></div></div>
+  </section>`;
+}
+function viewSemestreHTML(sem,sems,todas){
+  const mats=state.materias.filter(m=>m.semesterId===sem.id&&m.rol!=='docente');
+  const p=promSemestre(mats),nAp=mats.reduce((s,m)=>s+notasDeMateria(m.id).length,0);
+  const materias=`<div class="grid">${mats.map(materiaCard).join('')||'<p class="meta">Sin materias en este semestre.</p>'}</div>
+    ${esProfesor()?`<div class="madd"><button class="sec" data-action="addMateria" data-sem="${sem.id}">+ Agregar materia</button><button class="sec" data-action="createShared" data-sem="${sem.id}">🤝 Materia compartida</button></div>`:''}`;
+  const apuntes=mats.length?`<div class="sgrid">${mats.map(m=>{const n=notasDeMateria(m.id).length;return `<button type="button" class="scard" style="--c:${matColor(m)}" data-action="openMateria" data-id="${m.id}"><b>${esc(m.icon||'📘')} ${esc(m.name)}</b><span>${pluralMv(n,'apunte','apuntes')}</span><em aria-hidden="true">→</em></button>`}).join('')}</div>`
+    :'<div class="empty">Cuando tengas materias en este semestre, aquí verás sus apuntes.</div>';
+  return `<div class="mv"><div class="mv-col">
+    <nav class="crumbs" aria-label="Ruta"><button type="button" class="linkbtn" data-action="backMaterias">← Mis materias</button><span aria-hidden="true">/</span><span>${esc(sem.name)}</span></nav>
+    <div class="viewhead"><div><h1>🎓 ${esc(sem.name)}</h1><p class="sub">${pluralMv(mats.length,'materia','materias')}</p></div><span class="semAvg" title="Promedio del semestre">${p==null?'':'⌀ '+fmtN(p)}</span></div>
+    ${dwHTML(1,'Materias','Las materias del semestre · '+mats.length,materias)}
+    ${dwHTML(2,'Mis apuntes por materia','Entra a una materia para escribir tus apuntes · '+pluralMv(nAp,'apunte','apuntes')+' en total',apuntes)}
+  </div><aside class="mv-stats" aria-label="Resumen del estudiante">${matStatsHTML(sems.length,todas)}</aside></div>`;
+}
 function viewMateriasHTML(){
   const sems=state.semesters.filter(x=>!x.oculto);
-  const todas=[];
-  const bloques=sems.map(sem=>{
-    const mats=state.materias.filter(m=>m.semesterId===sem.id&&m.rol!=='docente');
-    todas.push(...mats);
-    return `<details class="sem" open>
-      <summary>
-        <span class="semT"><h2>🎓 ${esc(sem.name)}</h2><p>${pluralMv(mats.length,'materia','materias')}</p></span>
-        <span class="semAvg" title="Promedio del semestre">${(()=>{const p=promSemestre(mats);return p==null?'':'⌀ '+fmtN(p)})()}</span>
-        <span class="mpair">
-          <button class="icon-btn" data-action="renameSemester" data-id="${sem.id}" title="Renombrar semestre" aria-label="Renombrar semestre">${IC_EDIT}</button><i></i>
-          <button class="icon-btn del" data-action="delSemester" data-id="${sem.id}" title="Eliminar semestre" aria-label="Eliminar semestre">${IC_DEL}</button>
-        </span>
-      </summary>
-      <div class="grid">${mats.map(materiaCard).join('')||'<p class="meta">Sin materias en este semestre.</p>'}</div>
-      ${esProfesor()?`<div class="madd"><button class="sec" data-action="addMateria" data-sem="${sem.id}">+ Agregar materia</button><button class="sec" data-action="createShared" data-sem="${sem.id}">🤝 Materia compartida</button></div>`:''}
-    </details>`;
-  }).join('');
+  const todas=state.materias.filter(m=>m.rol!=='docente'&&sems.some(s=>s.id===m.semesterId));
+  if(route.semId){
+    const sem=sems.find(s=>s.id===route.semId);
+    if(sem)return viewSemestreHTML(sem,sems,todas);
+    delete route.semId;                                    // el semestre ya no existe: se vuelve al inicio
+  }
   return `<div class="mv"><div class="mv-col">
     <div class="viewhead"><div><h1>Mis materias</h1><p class="sub">${pluralMv(sems.length,'semestre','semestres')} y ${pluralMv(todas.length,'materia','materias')}</p></div>
       <span class="row" style="margin:0"><button class="sec" data-action="semDlg">📈 Promedio por semestre</button><button class="pr" data-action="addSemester">+ Semestre</button></span></div>
     ${invitacionesHTML()}
     ${repasoHoyHTML()}
     ${sems.length?'':'<div class="empty">Aún no tienes semestres. Agrega uno para empezar a organizar tus materias.</div>'}
-    ${bloques}
+    <div class="folders">${sems.map(folderSemestreHTML).join('')}<button type="button" class="folder add" data-action="addSemester"><span><span class="fplus" aria-hidden="true">＋</span>Nuevo semestre</span></button></div>
   </div><aside class="mv-stats" aria-label="Resumen del estudiante">${matStatsHTML(sems.length,todas)}</aside></div>`;
 }
 function materiaCard(m){
@@ -1288,7 +1350,7 @@ function viewMateriaDetailHTML(materiaId){
   const iaSel=cortes.some(c=>c.id===ui.iaCorte)?ui.iaCorte:(cortes[0]&&cortes[0].id);
   if(m.rol!=='estudiante'&&(!ui.iaUso||(!ui.iaUso.cargando&&Date.now()-(ui.iaUso.t||0)>60000)))setTimeout(cargarUsoIA,0);   // se consulta el cupo al abrir la materia
   return `
-    <button class="sec" data-action="${m.rol==='docente'?'backDocente':'backMaterias'}">${m.rol==='docente'?'← Espacio docente':'← Mis materias'}</button>
+    <button class="sec" data-action="${m.rol==='docente'?'backDocente':'backMaterias'}">${m.rol==='docente'?'← Espacio docente':'← '+esc(((state.semesters.find(s=>s.id===m.semesterId&&!s.oculto))||{}).name||'Mis materias')}</button>
     <div class="hero" style="--mc:${matColor(m)}"><div class="heroDot"></div><div><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1><p class="sub">${esc((state.semesters.find(x=>x.id===m.semesterId)||{}).name||'')}${state.semesters.find(x=>x.id===m.semesterId)?' · ':''}${pluralMv(state.temas.filter(x=>x.materiaId===m.id).length,'tema','temas')} · ${pluralMv(getCardsTodas(m.id).length,'tarjeta','tarjetas')}${m.semestre?` · <span class="chip">Semestre ${m.semestre}${m.curso?' · Curso '+esc(m.curso):''}</span>`:''}</p></div></div>
     ${m.rol==='docente'?docentePanelHTML(m):m.rol==='estudiante'?estudianteDocenteBoxHTML(m)+docsOriginalesHTML(m)+examenesEstudianteHTML(m):compartidoBoxHTML(m)}
 
@@ -1312,6 +1374,7 @@ function viewMateriaDetailHTML(materiaId){
       </div>
     </section>
 
+    ${notasMateriaHTML(m)}
     <section class="${m.rol==='estudiante'?'docRO':''}">
       <div class="viewhead"><h2>📁 Cortes</h2><button class="pr" data-action="addCorte" data-mat="${materiaId}">+ Agregar corte</button></div>
       <div class="card notasBox" style="margin-bottom:14px;${m.rol==='docente'?'display:none':''}">
@@ -2204,6 +2267,10 @@ $('searchBox').addEventListener('input',e=>{
 document.addEventListener('click',e=>{if(!e.target.closest('#searchWrap'))$('searchResults').innerHTML=''});
 
 /* ================= ACCIONES (clicks) ================= */
+document.addEventListener('keydown',e=>{
+  const f=e.target&&e.target.matches&&e.target.matches('.folder[role="button"]')?e.target:null;
+  if(f&&e.target===f&&(e.key==='Enter'||e.key===' ')){e.preventDefault();f.click()}
+});
 document.addEventListener('change',async e=>{
   if(!e.target||e.target.id!=='pdfCompInput')return;
   const f=e.target.files&&e.target.files[0];e.target.value='';
@@ -2276,7 +2343,18 @@ document.addEventListener('click',async e=>{
     }
   }
   else if(a==='openMateria'){route={view:'materiaDetail',materiaId:b.dataset.id};render();}
-  else if(a==='backMaterias')goToView('materias');
+  else if(a==='openSemester'){route={view:'materias',materiaId:null,semId:b.dataset.id};render()}
+  else if(a==='toggleDw'){
+    const sec=b.closest('.dw');if(!sec)return;
+    const abrir=!sec.classList.contains('open');
+    sec.classList.toggle('open',abrir);b.setAttribute('aria-expanded',String(abrir));
+    ui.semDr=ui.semDr||{1:true,2:false};ui.semDr[b.dataset.n]=abrir;
+  }
+  else if(a==='backMaterias'){
+    const mm=route.materiaId&&state.materias.find(x=>x.id===route.materiaId);
+    if(mm&&mm.rol!=='docente'&&state.semesters.some(s=>s.id===mm.semesterId&&!s.oculto)){route={view:'materias',materiaId:null,semId:mm.semesterId};render()}   // se vuelve al semestre de esa materia
+    else goToView('materias');
+  }
   else if(a==='backMateria'){route={view:'materiaDetail',materiaId:b.dataset.id};render();}
   else if(a==='addTema'){
     mutate(s=>{ui.open[b.dataset.corte]=true;s.temas.unshift({id:uid(),materiaId:b.dataset.mat,corteId:b.dataset.corte,title:'',body:'',by:miNombre(),publicado:((s.materias.find(x=>x.id===b.dataset.mat)||{}).rol==='docente')?false:undefined,updatedAt:Date.now()})});
@@ -2327,6 +2405,19 @@ document.addEventListener('click',async e=>{
   else if(a==='adminBorrar'){borrarCuentaAjena(b.dataset.uid)}
   else if(a==='notaEsquema'){const tm=miTema(b.dataset.id),ta=document.querySelector('textarea[data-tema="'+b.dataset.id+'"]');if(tm&&ta){const e=esquemaTexto(tm);if(e){ta.value=(ta.value.trim()?ta.value.replace(/\s+$/,'')+'\n\n':'')+e;programarNota(tm.id,tm.materiaId,ta.value)}}}
   else if(a==='ttsNota'){const tm=miTema(b.dataset.id);if(tm)ttsLeer('Mis apuntes: '+tm.title,textoNota(tm.id))}
+  else if(a==='notaGuardar'){guardarNotaMateria(b.dataset.mat)}
+  else if(a==='notaEditar'){
+    const n=notasMap[b.dataset.id];if(!n)return;
+    notaEditId=b.dataset.id;render(true);
+    const ti=$('apT-'+n.materiaId),tx=$('apX-'+n.materiaId);
+    if(ti)ti.value=n.titulo||'';
+    if(tx){tx.value=n.texto;tx.focus();if(tx.scrollIntoView)tx.scrollIntoView({block:'center'})}
+  }
+  else if(a==='notaCancelar'){
+    const n=notasMap[notaEditId];notaEditId=null;render(true);
+    if(n){const ti=$('apT-'+n.materiaId),tx=$('apX-'+n.materiaId);if(ti)ti.value='';if(tx)tx.value=''}
+  }
+  else if(a==='notaBorrar'){borrarNotaMateria(b.dataset.id)}
   else if(a==='pdfPick'){const pi=$('pdfCompInput');if(pi)pi.click()}
   else if(a==='ttsTema'){const tm=miTema(b.dataset.id);if(tm)ttsLeer(tm.title,textoTema(tm))}
   else if(a==='ttsSec'){const tm=miTema(b.dataset.tema),sc=tm&&(tm.secciones||[]).find(x=>x.id===b.dataset.sec);if(sc)ttsLeer(sc.title,textoSeccion(sc))}
@@ -3973,14 +4064,27 @@ function rolCardHTML(){
    se usa la función normal como antes.
    ====================================================================== */
 const ESPERA_MAX_IA_MS=270000;
+let ESPERA_ACK_MS=30000;          // si en este tiempo la función no avisa que arrancó, se explica el motivo en vez de esperar 4 minutos
+async function diagnosticarIA(){
+  const base='La función de IA no respondió: nunca llegó a trabajar en tu archivo. ';
+  try{
+    const r=await fetch('/.netlify/functions/generar-tema?diagnostico=1');
+    const d=await r.json();
+    const faltan=Object.entries(d.variables||{}).filter(([k,v])=>!v&&k!=='FIREBASE_SERVICE_ACCOUNT').map(([k])=>k);
+    let mio='';try{mio=(firebase.app().options||{}).projectId||''}catch(e){}
+    if(faltan.length)return base+'En Netlify faltan estas variables de entorno: '+faltan.join(', ')+'. Agrégalas en Site configuration → Environment variables y vuelve a desplegar el sitio (Deploys → Trigger deploy).';
+    if(d.proyecto&&mio&&d.proyecto!==mio)return base+'Netlify usa el proyecto de Firebase "'+d.proyecto+'" pero esta app usa "'+mio+'". Corrige FIREBASE_PROJECT_ID en Netlify y vuelve a desplegar.';
+    return base+'Las variables de Netlify parecen bien: revisa Netlify → Logs → Functions → generar-tema-background para ver el error exacto.';
+  }catch(e){return base+'Tampoco respondió la función de diagnóstico: comprueba en Netlify → Functions que las funciones estén desplegadas.'}
+}
 
 function esperarTrabajoIA(ref,statusEl,limpiar){
   return new Promise(resolver=>{
     const t0=Date.now();
-    let terminado=false,reloj=null,tope=null,cancelar=()=>{};
+    let terminado=false,reloj=null,tope=null,avisoTope=null,arranco=false,cancelar=()=>{};
     const terminar=r=>{
       if(terminado)return;terminado=true;
-      clearInterval(reloj);clearTimeout(tope);
+      clearInterval(reloj);clearTimeout(tope);clearTimeout(avisoTope);
       try{cancelar()}catch(e){}
       Promise.resolve().then(()=>limpiar&&limpiar()).catch(()=>{}).then(()=>{try{ref.delete()}catch(e){}});   // primero los trozos del PDF, luego el trabajo
       resolver(r);
@@ -3990,10 +4094,12 @@ function esperarTrabajoIA(ref,statusEl,limpiar){
       statusEl.textContent=limpiar?'🔍 La IA está leyendo tu PDF escaneado… '+seg+' s (puede tardar unos minutos)':'🤖 La IA está armando el tema y las tarjetas… '+seg+' s (si el archivo es grande puede tardar un par de minutos)';
     };
     pintar();reloj=setInterval(pintar,1000);
+    avisoTope=setTimeout(async()=>{if(terminado||arranco)return;const msg=await diagnosticarIA();if(!terminado&&!arranco)terminar({ok:false,error:msg})},ESPERA_ACK_MS);
     tope=setTimeout(()=>terminar({ok:false,error:'La IA tardó demasiado en responder. Inténtalo de nuevo o prueba con un archivo más corto.'}),ESPERA_MAX_IA_MS);
     cancelar=ref.onSnapshot(snap=>{
       const d=snap.exists?snap.data():null;
       if(!d)return;
+      if(d.estado&&d.estado!=='pendiente')arranco=true;          // la función ya está trabajando
       if(d.estado==='listo'){
         let datos=null;try{datos=JSON.parse(d.resultado)}catch(e){}
         terminar(datos?{ok:true,data:datos}:{ok:false,error:'La IA devolvió un resultado ilegible. Inténtalo de nuevo.'});
