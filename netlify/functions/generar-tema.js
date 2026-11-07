@@ -1,0 +1,483 @@
+// Hecho por Sebastián Poveda y Santiago Romero. 2026
+// Función de Netlify · Auren
+// Esta función corre en el servidor de Netlify, nunca en el navegador del usuario.
+// La clave se lee de la variable de entorno APIKEYGEMINIS (Site settings > Environment
+// variables en Netlify) y jamás queda expuesta en el código ni en el sitio publicado.
+
+// Si el primero está saturado o no existe, se prueba el siguiente.
+// Hecho por Sebastián Poveda y Santiago Romero. 2026 · modelos de IA
+// El límite diario de peticiones (RPD) se cuenta por modelo y por proyecto. Cuando uno se agota (429),
+// se pasa al siguiente, que tiene su propio cupo. Los últimos son versiones "lite", con cupos más altos.
+// Si algún nombre no existe en tu cuenta, devuelve 404 y simplemente se salta al siguiente.
+const MODELOS = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+
+// Esquema que Gemini está obligado a respetar: la respuesta siempre llega con la forma correcta,
+// así no se gastan peticiones repitiendo por un JSON mal formado.
+const ESQUEMA_RESPUESTA = {
+  type: 'OBJECT',
+  properties: {
+    titulo: { type: 'STRING' },
+    resumen: { type: 'STRING' },
+    secciones: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          titulo: { type: 'STRING' },
+          contenido: { type: 'STRING' },
+          relacion: { type: 'STRING' },
+          ideas: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                tipo: { type: 'STRING', enum: ['definicion', 'caracteristica', 'ejemplo'] },
+                termino: { type: 'STRING' },
+                texto: { type: 'STRING' }
+              },
+              required: ['tipo', 'termino', 'texto'],
+              propertyOrdering: ['tipo', 'termino', 'texto']
+            }
+          }
+        },
+        required: ['titulo', 'contenido', 'relacion', 'ideas'],
+        propertyOrdering: ['titulo', 'contenido', 'relacion', 'ideas']
+      }
+    },
+    tarjetas: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          frente: { type: 'STRING' },
+          reverso: { type: 'STRING' },
+          distractores: { type: 'ARRAY', items: { type: 'STRING' } },
+          falsa: { type: 'STRING' },
+          hueco_oracion: { type: 'STRING' },
+          hueco_respuesta: { type: 'STRING' },
+          dificultad: { type: 'STRING' }
+        },
+        required: ['frente', 'reverso', 'distractores', 'falsa', 'hueco_oracion', 'hueco_respuesta', 'dificultad'],
+        propertyOrdering: ['frente', 'reverso', 'distractores', 'falsa', 'hueco_oracion', 'hueco_respuesta', 'dificultad']
+      }
+    }
+  },
+  required: ['titulo', 'resumen', 'secciones', 'tarjetas'],
+  propertyOrdering: ['titulo', 'resumen', 'secciones', 'tarjetas']
+};
+
+const json = (statusCode, obj) => ({
+  statusCode,
+  headers: { 'content-type': 'application/json; charset=utf-8' },
+  body: JSON.stringify(obj)
+});
+
+// Tiempo máximo total esperando a la IA. Netlify corta las funciones síncronas a los 60 s
+// (límite fijo), así que dejamos 10 s de margen para poder responder con un error claro
+// en vez de que Netlify devuelva un 502 sin explicación.
+const LIMITE_MS = 50000;
+
+// Texto máximo que se analiza. Antes eran 20 000 caracteres y todo lo que viniera después se ignoraba;
+// ahora entra mucho más (el cupo de Gemini se cuenta por petición, no por tamaño). El navegador avisa si se recortó.
+const LIMITE_TEXTO = 60000;
+const LIMITE_PDF_B64 = 12 * 1024 * 1024; // ~8 MB de PDF en base64
+
+// Hecho por Sebastián Poveda y Santiago Romero. 2026 · llamada a Gemini con tiempo límite y reintentos
+async function llamarGemini(apiKey, prompt, limiteMs = LIMITE_MS, pdfBase64 = null) {
+  const inicio = Date.now();
+  let ultima;
+  for (const modelo of MODELOS) {
+    let usaPensamientoCorto = true; // thinkingLevel "low": razona menos y responde antes
+    let usaEsquema = true;          // responseSchema: fuerza la forma exacta del JSON
+    for (let intento = 0; intento < 4; intento++) {
+      const restante = limiteMs - (Date.now() - inicio);
+      if (restante < 3000) throw new Error('TIMEOUT');
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), restante);
+      const generationConfig = {
+        responseMimeType: 'application/json',
+        temperature: 0.4,
+        maxOutputTokens: 12288
+      };
+      if (usaEsquema) generationConfig.responseSchema = ESQUEMA_RESPUESTA;
+      if (usaPensamientoCorto) generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+      let resp;
+      try {
+        resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,
+          {
+            method: 'POST',
+            signal: ctrl.signal,
+            headers: {
+              'content-type': 'application/json',
+              'x-goog-api-key': apiKey
+            },
+            body: JSON.stringify({
+              contents: [{
+                role: 'user',
+                parts: pdfBase64
+                  ? [{ inline_data: { mime_type: 'application/pdf', data: pdfBase64 } }, { text: prompt }]
+                  : [{ text: prompt }]
+              }],
+              generationConfig
+            })
+          }
+        );
+      } catch (e) {
+        if (e.name === 'AbortError') throw new Error('TIMEOUT');
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
+      if (resp.ok) return resp;
+      ultima = resp;
+      console.error('Gemini respondió', resp.status, 'con el modelo', modelo);
+      // 400: puede que ese modelo no acepte el razonamiento corto o el esquema. Se quitan de a uno y se reintenta.
+      if (resp.status === 400) {
+        if (usaPensamientoCorto) { usaPensamientoCorto = false; continue; }
+        if (usaEsquema) { usaEsquema = false; continue; }
+        return resp;
+      }
+      // 404 = modelo no disponible, 429 = cuota agotada: reintentar solo gastaría más cuota,
+      // así que se pasa directo al siguiente modelo (cada modelo tiene su propio límite).
+      if (resp.status === 404 || resp.status === 429) break;
+      if (![500, 503].includes(resp.status)) return resp; // error que no se arregla reintentando
+      if (intento < 3) await new Promise(r => setTimeout(r, 800));
+    }
+  }
+  return ultima;
+}
+
+// Intenta leer el JSON de la IA. Si vino con ```json o cortado a la mitad, lo rescata:
+// recorta hasta el último elemento completo y cierra los corchetes que falten.
+// Hecho por Sebastián Poveda y Santiago Romero. 2026 · lector de JSON tolerante
+function leerJSON(raw) {
+  let t = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  try { return JSON.parse(t); } catch (e) { /* sigue */ }
+  for (let i = t.length - 1; i > 0 && i > t.length - 4000; i--) {
+    const ch = t[i];
+    if (ch !== '}' && ch !== ']') continue;
+    const base = t.slice(0, i + 1);
+    for (const c of ['', ']}', '}]}', ']}]}']) {
+      try {
+        const obj = JSON.parse(base + c);
+        if (obj && obj.titulo && Array.isArray(obj.secciones || obj.tarjetas)) return obj;
+      } catch (e) { /* prueba otro cierre */ }
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Protección: solo pueden usar la IA personas con sesión iniciada en TU proyecto de Firebase.
+// El navegador manda el token de sesión en la cabecera Authorization y aquí se verifica con el
+// servicio público de Firebase (no hace falta ninguna clave secreta ni librerías extra).
+// La "apiKey" web de Firebase NO es secreta (ya viaja en index.html); solo identifica el proyecto.
+// ---------------------------------------------------------------------------------------------
+// Esta versión NO trae llaves por defecto: deben definirse en Netlify (FIREBASE_API_KEY y FIREBASE_PROJECT_ID).
+const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || '';
+
+async function verificarUsuario(event) {
+  const h = event.headers || {};
+  const cab = h.authorization || h.Authorization || '';
+  const m = cab.match(/^Bearer\s+(.+)$/i);
+  if (!m) return null;
+  try {
+    const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + FIREBASE_API_KEY, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ idToken: m[1] })
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const u = d.users && d.users[0];
+    return u && !u.disabled ? u : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Límite por persona. Es "de mejor esfuerzo": vive en la memoria de la instancia de Netlify y se
+// reinicia cuando esta se apaga, pero frena a quien intente gastar la cuota en bucle.
+// ---------------------------------------------------------------------------------------------
+// Cupo DIARIO de archivos por persona, guardado en Firestore (iaUso/{uid}). A diferencia del límite por hora de
+// abajo, no se pierde cuando Netlify apaga la función. Se lee y se escribe con el token de la propia persona, y las
+// reglas de Firestore solo le permiten subirlo de 1 en 1. El día cambia a medianoche de Colombia (UTC-5).
+// Solo se descuenta cuando la IA SÍ devolvió un resultado: si falla, la persona no pierde un archivo.
+// Cambia el límite con la variable de entorno LIMITE_IA_DIARIO en Netlify (el navegador usa IA_LIMITE_DIARIO en index.html:
+// mantenlos iguales para que el aviso "te quedan X archivos" coincida).
+// ---------------------------------------------------------------------------------------------
+const PROYECTO = process.env.FIREBASE_PROJECT_ID || '';
+const LIMITE_DIARIO = Number(process.env.LIMITE_IA_DIARIO) || 20;
+const diaColombia = () => Math.floor((Date.now() - 5 * 3600 * 1000) / 86400000);
+const urlUso = uid => 'https://firestore.googleapis.com/v1/projects/' + PROYECTO + '/databases/(default)/documents/iaUso/' + uid;
+function tokenDe(event) {
+  const h = event.headers || {};
+  const m = (h.authorization || h.Authorization || '').match(/^Bearer\s+(.+)$/i);
+  return m ? m[1] : null;
+}
+async function leerUso(uid, token) {
+  const r = await fetch(urlUso(uid), { headers: { authorization: 'Bearer ' + token } });
+  if (r.status === 404) return { n: 0 };
+  if (!r.ok) throw new Error('Firestore respondió ' + r.status);
+  const d = await r.json();
+  const f = d.fields || {};
+  const dia = Number(f.dia && f.dia.integerValue);
+  const n = Number(f.n && f.n.integerValue) || 0;
+  return { n: dia === diaColombia() ? n : 0 };
+}
+async function sumarUso(uid, token, n) {
+  const r = await fetch(urlUso(uid), {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
+    body: JSON.stringify({ fields: { dia: { integerValue: String(diaColombia()) }, n: { integerValue: String(n + 1) } } })
+  });
+  if (!r.ok) throw new Error('Firestore respondió ' + r.status + ': ' + (await r.text()).slice(0, 200));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Rol: solo profesores y admin pueden usar la IA. Se lee usuarios/{uid} con el token de la propia persona (las reglas
+// de Firestore le dejan leer su propio documento). El primer admin es el correo semilla (cambia ADMIN_EMAIL en Netlify).
+// ---------------------------------------------------------------------------------------------
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'santiagoromerov2008@gmail.com').toLowerCase();
+async function leerRol(uid, token) {
+  const r = await fetch('https://firestore.googleapis.com/v1/projects/' + PROYECTO + '/databases/(default)/documents/usuarios/' + uid,
+    { headers: { authorization: 'Bearer ' + token } });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('Firestore respondió ' + r.status);
+  const d = await r.json();
+  return (d.fields && d.fields.rol && d.fields.rol.stringValue) || null;
+}
+
+const LIMITE_POR_HORA = 30;
+const usoPorUsuario = new Map();
+function superaLimite(uid) {
+  const ahora = Date.now();
+  const recientes = (usoPorUsuario.get(uid) || []).filter(t => ahora - t < 3600 * 1000);
+  if (recientes.length >= LIMITE_POR_HORA) { usoPorUsuario.set(uid, recientes); return true; }
+  recientes.push(ahora);
+  usoPorUsuario.set(uid, recientes);
+  return false;
+}
+
+// Hecho por Sebastián Poveda y Santiago Romero. 2026 · punto de entrada de la función
+exports.handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return json(405, { error: 'Método no permitido.' });
+  }
+
+  if (!FIREBASE_API_KEY || !PROYECTO) {
+    return json(500, { error: 'Falta configurar FIREBASE_API_KEY y FIREBASE_PROJECT_ID en las variables de entorno de Netlify.' });
+  }
+  const usuario = await verificarUsuario(event);
+  if (!usuario) {
+    return json(401, { error: 'Debes iniciar sesión para usar la IA. Si ya lo hiciste, cierra sesión y vuelve a entrar.' });
+  }
+  const esSemilla = String(usuario.email || '').toLowerCase() === ADMIN_EMAIL && usuario.emailVerified === true;
+  if (!esSemilla) {
+    let rol = null;
+    try {
+      rol = await leerRol(usuario.localId, tokenDe(event));
+    } catch (e) {
+      console.error('No se pudo leer el rol:', e);
+      return json(503, { error: 'No se pudo comprobar tu rol. Inténtalo de nuevo en un momento.' });
+    }
+    if (rol !== 'profesor' && rol !== 'admin') {
+      return json(403, { error: 'Solo los profesores pueden generar temas con IA.' });
+    }
+  }
+  if (superaLimite(usuario.localId)) {
+    return json(429, { error: 'Llegaste al límite de ' + LIMITE_POR_HORA + ' archivos por hora. Inténtalo más tarde.' });
+  }
+
+  const apiKey = process.env.APIKEYGEMINIS;
+  if (!apiKey) {
+    return json(500, { error: 'Falta configurar APIKEYGEMINIS en Netlify (Site settings > Environment variables).' });
+  }
+
+  let texto, materia, pdfBase64;
+  try {
+    const body = JSON.parse(event.body || '{}');
+    texto = (body.texto || '').toString();
+    materia = (body.materia || '').toString();
+    // PDF escaneado (sin texto): se le pasa a Gemini el archivo para que lo lea directamente
+    pdfBase64 = (body.pdfBase64 || '').toString();
+  } catch (e) {
+    return json(400, { error: 'Cuerpo de la petición inválido.' });
+  }
+
+  if (pdfBase64) {
+    if (pdfBase64.length > LIMITE_PDF_B64) {
+      return json(413, { error: 'El PDF es demasiado grande para que la IA lo lea (máximo 8 MB).' });
+    }
+  } else if (!texto.trim()) {
+    return json(400, { error: 'No llegó texto para analizar.' });
+  }
+
+  // Cupo diario (antes de gastar la IA)
+  const token = tokenDe(event);
+  let uso;
+  try {
+    uso = await leerUso(usuario.localId, token);
+  } catch (e) {
+    console.error('No se pudo leer el cupo diario:', e);
+    return json(503, { error: 'No se pudo comprobar tu cupo diario de archivos. Si eres quien administra la página, revisa que las reglas de Firestore (colección iaUso) estén publicadas. Inténtalo de nuevo en un momento.' });
+  }
+  if (uso.n >= LIMITE_DIARIO) {
+    return json(429, {
+      error: 'Ya usaste tus ' + LIMITE_DIARIO + ' archivos de hoy. El cupo se renueva a la medianoche (hora de Colombia).',
+      cupo: { usados: uso.n, limite: LIMITE_DIARIO, restantes: 0 }
+    });
+  }
+
+  // Tope de seguridad: no mandamos textos gigantes a la IA (cuesta más y no hace falta).
+  const textoRecortado = texto.slice(0, LIMITE_TEXTO);
+// Hecho por Sebastián Poveda y Santiago Romero. 2026 · modelos de IA
+  const bloqueDocumento = pdfBase64
+    ? 'DOCUMENTO A ANALIZAR: el archivo PDF adjunto. Puede ser un escaneo o fotos de hojas: léelo completo con cuidado (incluida la letra manuscrita o el texto dentro de imágenes si se entiende). Si una parte es ilegible, no la inventes: déjala fuera.'
+    : 'TEXTO A ANALIZAR:\n"""\n' + textoRecortado + '\n"""';
+  // Hecho por Sebastián Poveda y Santiago Romero. 2026 · instrucciones para la IA
+  const prompt = `Eres un docente universitario experto en didáctica. Conviertes apuntes de clase (sacados de un PDF o una presentación) en material de estudio claro, para que un estudiante pueda aprender solo, sin ayuda de nadie.
+
+Materia: "${materia || 'sin especificar'}"
+
+PROCESO (hazlo mentalmente, no lo escribas):
+1. Lee todo el texto y determina qué tipo de documento es (teoría, un modelo o autor, un procedimiento, ejercicios resueltos, casos, normativa, formulario, diapositivas con poco texto, etc.) y qué temas contiene realmente.
+2. Decide TÚ la estructura que mejor sirve a ESE documento. No existe una plantilla: dos documentos distintos deben producir secciones distintas. Evita repetir siempre la misma estructura ("Introducción / Desarrollo / Conclusión", "Definición / Características / Ejemplos"): crea una sección solo si el texto tiene material real para ella.
+3. Ordena las secciones como se aprende: de lo básico a lo complejo, o siguiendo el orden lógico del documento.
+4. Escribe todo usando únicamente información que esté en el texto.
+
+REGLAS DEL RESUMEN:
+- "resumen": 2 o 3 frases que digan de qué trata el documento y qué debería entender el estudiante al terminar de estudiarlo.
+
+REGLAS DE LAS SECCIONES:
+- Entre 3 y 8 secciones: pocas para textos cortos, más para textos largos o con muchos temas distintos.
+- Los títulos deben ser específicos y explicativos del contenido (por ejemplo "Componentes de la memoria de trabajo"), nunca genéricos como "Conceptos" u "Otros".
+- No inventes datos que no estén en el texto. Si algo no aparece, no crees la sección ni lo agregues.
+- "contenido": explicación didáctica, clara y bien conectada, escrita para quien ve el tema por primera vez. Usa párrafos cortos para explicar. Si la sección abarca varios subtemas, sepáralos con subtítulos escritos en una línea que empiece con "## " (por ejemplo "## Etapas del proceso"). Usa listas de guiones ("- ") para pasos, rasgos o clasificaciones. Explica el porqué y el cómo cuando el texto lo permita, no solo enumeres. Si el texto trae ejemplos que ilustran la idea, inclúyelos aquí. Texto plano: sin asteriscos ni otro markdown.
+- "relacion": una o dos frases que expliquen cómo se conecta esta sección con otras ideas del documento (causa y efecto, parte y todo, comparación, secuencia, dependencia), nombrando esas otras secciones o conceptos. Si el texto no muestra una relación real, devuelve una cadena vacía "".
+- "ideas" son de 2 a 5 por sección, tomadas del texto. Cada idea tiene: "tipo", "termino" y "texto". El "tipo" debe ser EXACTAMENTE "definicion" (qué es el concepto), "caracteristica" (rasgos, propiedades, pasos, datos, causas) o "ejemplo" (un caso que aparezca en el texto; no inventes ejemplos). El "termino" es el concepto, autor, etapa, teoría o nombre propio central de esa idea (1 a 4 palabras). El "texto" explica ese término en máximo 16 palabras y no repite el término al inicio. Procura que cada sección tenga al menos una definición si el texto la da.
+- USA EL VOCABULARIO DEL TEXTO: los términos técnicos, nombres de autores, teorías, siglas y títulos deben escribirse tal como aparecen en el texto original, sin reemplazarlos por sinónimos ni términos genéricos. Los títulos de las secciones también deben usar esos términos (por ejemplo "Teoría del apego de Bowlby", no "Otra teoría").
+
+REGLAS DE LAS TARJETAS:
+- Entre 8 y 15 tarjetas, más cuanto más largo y variado sea el texto. Deben cubrir las ideas importantes de TODO el texto, no solo del principio.
+- Mezcla tipos: definiciones de conceptos, preguntas de comprensión ("¿por qué…?", "¿cómo…?", "¿en qué se diferencia X de Y?"), ejemplos y relaciones entre ideas.
+- El "frente" debe ser corto y entenderse sin haber visto el documento (un término o una pregunta clara).
+- El "reverso" es una respuesta precisa, autónoma y breve (máximo 25 palabras). Se usa como opción en exámenes de opción múltiple, así que cada reverso debe ser DISTINTO de los demás y de longitud y estilo parecidos entre sí.
+- "distractores": EXACTAMENTE 3 respuestas INCORRECTAS pero verosímiles para esa tarjeta: parecidas al reverso en longitud, tono y vocabulario, y de preferencia tomadas de conceptos cercanos del mismo texto. Ninguna puede ser correcta, ni igual al reverso, ni una variación trivial de él. Así la respuesta correcta no se nota por ser la más larga o la más específica.
+- "falsa": una afirmación FALSA sobre ese mismo concepto, con la misma forma que el reverso y creíble (por ejemplo, cambiando un dato, un autor o una causa). Se usa en preguntas de verdadero o falso, así que jamás debe ser verdadera según el texto.
+- "dificultad": EXACTAMENTE "facil" (recordar un dato o una definición directa), "media" (comprender o relacionar ideas) o "dificil" (aplicar, comparar, inferir o distinguir matices parecidos). Reparte las tarjetas entre los tres niveles según lo que pide el texto.
+- "hueco_oracion" y "hueco_respuesta": cuando la tarjeta se preste (definiciones, términos, autores, fechas, nombres), una oración tomada del texto con UN solo hueco marcado con ____ (cuatro guiones bajos) y, en "hueco_respuesta", la palabra o frase corta (1 a 3 palabras) que lo completa. Si la tarjeta no se presta, deja ambos como cadena vacía "".
+
+Devuelve EXCLUSIVAMENTE un JSON válido, sin explicación adicional, con esta forma exacta:
+
+{"titulo":"título corto para el tema (máx 8 palabras)","resumen":"2 o 3 frases","secciones":[{"titulo":"título de la sección","contenido":"contenido de la sección","relacion":"cómo se conecta con otras ideas, o cadena vacía","ideas":[{"tipo":"definicion","termino":"término clave","texto":"explicación corta"},{"tipo":"caracteristica","termino":"otro término","texto":"explicación corta"},{"tipo":"ejemplo","termino":"nombre del caso","texto":"el ejemplo en pocas palabras"}]}],"tarjetas":[{"frente":"término o pregunta corta","reverso":"respuesta clara y breve","distractores":["incorrecta 1","incorrecta 2","incorrecta 3"],"falsa":"afirmación falsa creíble","hueco_oracion":"oración con ____ o cadena vacía","hueco_respuesta":"palabra que falta o cadena vacía","dificultad":"facil, media o dificil"}]}
+
+${bloqueDocumento}`;
+
+  // La versión en segundo plano (generar-tema-background.js) pasa un tiempo máximo mayor.
+  const limiteMs = event._limiteMs || LIMITE_MS;
+  try {
+    const resp = await llamarGemini(apiKey, prompt, limiteMs, pdfBase64 || null);
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      if (resp.status === 429) {
+        return json(429, { error: 'La IA alcanzó su límite de uso gratuito por ahora. Espera uno o dos minutos y vuelve a intentarlo. Si sigue igual, es el límite diario y se reinicia en unas horas.' });
+      }
+      return json(502, { error: 'La IA respondió con un error: ' + errText.slice(0, 600) });
+    }
+
+    const data = await resp.json();
+    const candidate = data.candidates && data.candidates[0];
+    const raw = candidate && candidate.content && candidate.content.parts
+      ? candidate.content.parts.map(p => p.text || '').join('').trim()
+      : '';
+
+    if (!raw) {
+      return json(502, { error: 'La IA no devolvió contenido. Puede que el archivo sea muy largo o el contenido haya sido bloqueado.' });
+    }
+
+    const finish = candidate && candidate.finishReason;
+    let parsed = leerJSON(raw);
+    if (!parsed) {
+      console.error('JSON ilegible. finishReason =', finish, '| largo =', raw.length, '| final =', raw.slice(-120));
+      return json(502, { error: finish === 'MAX_TOKENS'
+        ? 'La respuesta de la IA salió demasiado larga y se cortó. Prueba con un archivo más corto o con menos páginas.'
+        : 'La IA no devolvió un resultado con el formato esperado. Prueba de nuevo.' });
+    }
+    if (finish === 'MAX_TOKENS') console.error('Respuesta cortada por MAX_TOKENS; se rescató parte del JSON.');
+    // Hecho por Sebastián Poveda y Santiago Romero. 2026 · normalización de ideas y tipos
+    // Cada sección: "ideas" [{tipo, texto}] pasan a "puntos" (textos) y "tipos" (paralelo).
+    const TIPOS = ['definicion', 'caracteristica', 'ejemplo'];
+    if (Array.isArray(parsed.secciones)) {
+      parsed.secciones.forEach(sec => {
+        if (!sec || typeof sec !== 'object') return;
+        const fuente = Array.isArray(sec.ideas) ? sec.ideas : (Array.isArray(sec.puntos) ? sec.puntos : []);
+        const unir = (termino, texto) => {
+          // El esquema muestra "Término: explicación" con el término resaltado.
+          const t = String(termino || '').trim().replace(/[:.\s]+$/, '');
+          const x = String(texto || '').trim();
+          if (!t) return x;
+          if (!x) return t;
+          if (x.toLowerCase().startsWith(t.toLowerCase())) {
+            // La IA repitió el término al inicio: se deja una sola vez, con el formato "Término: explicación".
+            const resto = x.slice(t.length).replace(/^[:\-–—\s]+/, '');
+            return resto ? t + ': ' + resto : t;
+          }
+          return t + ': ' + x;
+        };
+        const pares = fuente.map(x => (typeof x === 'string')
+          ? { texto: x, tipo: null }
+          : { texto: unir(x && x.termino, x && x.texto), tipo: x && TIPOS.includes(x.tipo) ? x.tipo : null }
+        ).map(o => ({ texto: o.texto.trim(), tipo: o.tipo })).filter(o => o.texto).slice(0, 6);
+        sec.puntos = pares.map(o => o.texto);
+        sec.tipos = pares.map(o => o.tipo);
+        delete sec.ideas;
+      });
+    }
+    parsed.resumen = typeof parsed.resumen === 'string' ? parsed.resumen.trim() : '';
+    if (Array.isArray(parsed.secciones)) {
+      parsed.secciones.forEach(sec => {
+        if (sec && typeof sec === 'object') sec.relacion = typeof sec.relacion === 'string' ? sec.relacion.trim() : '';
+      });
+    }
+    if (!Array.isArray(parsed.tarjetas)) parsed.tarjetas = [];
+    // Datos extra de cada tarjeta (opciones incorrectas, afirmación falsa, hueco): limpios y sin repetir el reverso
+    const txt = v => (typeof v === 'string' ? v.trim() : '');
+    parsed.tarjetas.forEach(t => {
+      if (!t || typeof t !== 'object') return;
+      const rev = txt(t.reverso).toLowerCase();
+      t.distractores = (Array.isArray(t.distractores) ? t.distractores : [])
+        .map(txt).filter((x, i, a) => x && x.toLowerCase() !== rev && a.indexOf(x) === i).slice(0, 3);
+      t.falsa = txt(t.falsa).toLowerCase() === rev ? '' : txt(t.falsa);
+      t.hueco_oracion = txt(t.hueco_oracion);
+      t.hueco_respuesta = txt(t.hueco_respuesta);
+      t.dificultad = ['facil', 'media', 'dificil'].includes(txt(t.dificultad).toLowerCase()) ? txt(t.dificultad).toLowerCase() : 'media';
+      if (!t.hueco_oracion.includes('____') || !t.hueco_respuesta) { t.hueco_oracion = ''; t.hueco_respuesta = ''; }
+    });
+    if (!Array.isArray(parsed.secciones) || !parsed.secciones.length) {
+      if (!parsed.tarjetas.length) return json(502, { error: 'La IA devolvió una respuesta incompleta. Prueba de nuevo.' });
+    }
+
+    if (!parsed.titulo || !Array.isArray(parsed.tarjetas)) {
+      return json(502, { error: 'La respuesta de la IA no tiene el formato esperado.' });
+    }
+
+    // La IA respondió bien: ahora sí se descuenta un archivo del cupo de hoy
+    let usados = uso.n;
+    try { await sumarUso(usuario.localId, token, uso.n); usados = uso.n + 1; }
+    catch (e) { console.error('No se pudo registrar el uso (se entrega el resultado igual):', e); }
+    parsed.cupo = { usados, limite: LIMITE_DIARIO, restantes: Math.max(0, LIMITE_DIARIO - usados) };
+    return json(200, parsed);
+  } catch (err) {
+    if (err.message === 'TIMEOUT') {
+      console.error('La IA tardó más de', limiteMs, 'ms');
+      return json(504, { error: 'La IA tardó demasiado en responder. Prueba con un archivo más corto o inténtalo de nuevo en un momento.' });
+    }
+    console.error('Error inesperado:', err);
+    return json(500, { error: 'Error inesperado: ' + err.message });
+  }
+};
+
+// Hecho por Sebastián Poveda y Santiago Romero. 2026
