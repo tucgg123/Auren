@@ -1,0 +1,333 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Roles ----------
+    // El rol de cada cuenta vive en usuarios/{uid}. Solo un admin puede cambiarlo. El primer admin es el correo
+    // semilla (verificado): así no hay que crear nada a mano. Cambia el correo aquí y en la función de Netlify.
+    function esAdminSemilla() {
+      return request.auth != null
+        && request.auth.token.get('email', '') == 'santiagoromerov2008@gmail.com'
+        && request.auth.token.get('email_verified', false) == true;
+    }
+    function tieneRol(roles) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in roles;
+    }
+    function esAdmin() { return esAdminSemilla() || tieneRol(['admin']); }
+    function esProfe() { return esAdminSemilla() || tieneRol(['profesor', 'admin']); }
+
+    match /usuarios/{u} {
+      allow get: if request.auth != null && (request.auth.uid == u || esAdmin());
+      allow list: if esAdmin();
+      // Cada cuenta nace como estudiante. Solo el correo semilla puede nacer como admin.
+      allow create: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['rol', 'email', 'nombre', 'creado'])
+        && ( request.resource.data.rol == 'estudiante'
+             || ( request.resource.data.rol == 'admin' && esAdminSemilla() ) );
+      // Nadie cambia su propio rol; un admin sí puede cambiar el de cualquiera
+      allow update: if request.auth != null && (
+        esAdmin()
+        || ( request.auth.uid == u
+             && request.resource.data.rol == resource.data.rol
+             && request.resource.data.keys().hasOnly(['rol', 'email', 'nombre', 'creado']) ) );
+      allow delete: if request.auth != null && ( request.auth.uid == u || esAdmin() );
+    }
+
+    // Mis apuntes: privados. Solo su dueño los lee o escribe (ni el profesor ni un admin)
+    match /anotaciones/{u}/items/{temaId} {
+      allow read, delete: if request.auth != null && request.auth.uid == u;
+      allow create, update: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['materiaId', 'texto', 'actualizado'])
+        && request.resource.data.texto is string && request.resource.data.texto.size() <= 20000
+        && request.resource.data.materiaId is string
+        && request.resource.data.actualizado is number;
+    }
+
+    // Datos personales: solo la propia persona
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Materias compartidas entre compañeros (tipo 'compartida') y materias de docente (tipo 'docente')
+    match /temarios/{id} {
+
+      function esMiembro() {
+        return request.auth.uid in resource.data.members;
+      }
+      function soloCambia(campos) {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
+      }
+      function seAgregaA() {
+        return request.resource.data.members == resource.data.members.concat([request.auth.uid]);
+      }
+
+      // Solo los miembros leen
+      allow read: if request.auth != null && esMiembro();
+
+      // Crear: quien crea queda como dueño y único miembro
+      allow create: if request.auth != null
+        && esProfe()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.members == [request.auth.uid];
+
+      allow update: if request.auth != null && (
+        // Unirse con código: solo materias entre compañeros, y solo agregándose a sí misma
+        ( !esMiembro()
+          && resource.data.get('tipo', 'compartida') == 'compartida'
+          && soloCambia(['members', 'memberNames'])
+          && seAgregaA() )
+        ||
+        // Unirse por invitación del docente: el correo verificado debe tener una invitación
+        ( !esMiembro()
+          && request.auth.token.email_verified == true
+          && exists(/databases/$(database)/documents/invitaciones/$(id + '_' + request.auth.token.email))
+          && soloCambia(['members', 'memberNames'])
+          && seAgregaA() )
+        ||
+        // Salirse: un miembro (que no sea el dueño) solo puede quitarse a sí mismo
+        ( esMiembro()
+          && request.auth.uid != resource.data.ownerUid
+          && soloCambia(['members', 'memberNames'])
+          && request.resource.data.members == resource.data.members.removeAll([request.auth.uid]) )
+        ||
+        // El dueño (docente o creador del grupo) puede editar, menos cambiar de dueño
+        ( resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == request.auth.uid )
+      );
+
+      // Solo el dueño elimina la materia
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+
+      // Temas y tarjetas
+      match /temas/{temaId} {
+        function padre() {
+          return get(/databases/$(database)/documents/temarios/$(id)).data;
+        }
+        function esDocente() {
+          return padre().get('tipo', 'compartida') == 'docente';
+        }
+
+        // Materia de docente: el estudiante solo lee lo publicado. Compañeros: todos leen.
+        allow read: if request.auth != null
+          && request.auth.uid in padre().members
+          && ( !esDocente()
+               || padre().ownerUid == request.auth.uid
+               || resource.data.publicado == true );
+
+        // Materia de docente: solo el docente escribe. Compañeros: todos escriben.
+        allow write: if request.auth != null
+          && request.auth.uid in padre().members
+          && ( !esDocente() || padre().ownerUid == request.auth.uid );
+
+        // Documento original que subió el docente (PDF/PPTX), troceado en base64: temas/{temaId}/archivo/{n}
+        // Lo lee quien puede leer el tema (el estudiante solo si el tema está publicado). Lo escribe quien puede escribir el tema.
+        // Imágenes de un tema (JPEG/PNG/WebP ya comprimidas, en base64): las lee quien puede leer el tema; solo escribe el profesor dueño
+        match /medios/{mid} {
+          allow read: if request.auth != null
+            && request.auth.uid in padre().members
+            && ( !esDocente()
+                 || padre().ownerUid == request.auth.uid
+                 || get(/databases/$(database)/documents/temarios/$(id)/temas/$(temaId)).data.publicado == true );
+          allow create, update: if request.auth != null
+            && esProfe()
+            && request.auth.uid in padre().members
+            && ( !esDocente() || padre().ownerUid == request.auth.uid )
+            && request.resource.data.keys().hasOnly(['data', 'tipo', 'nombre'])
+            && request.resource.data.tipo == 'img'
+            && request.resource.data.nombre is string && request.resource.data.nombre.size() <= 120
+            && request.resource.data.data is string
+            && request.resource.data.data.size() <= 750000
+            && request.resource.data.data.matches('data:image/(jpeg|png|webp);base64,.*');
+          allow delete: if request.auth != null
+            && request.auth.uid in padre().members
+            && ( !esDocente() || padre().ownerUid == request.auth.uid );
+        }
+
+        match /archivo/{parte} {
+          allow read: if request.auth != null
+            && request.auth.uid in padre().members
+            && ( !esDocente()
+                 || padre().ownerUid == request.auth.uid
+                 || get(/databases/$(database)/documents/temarios/$(id)/temas/$(temaId)).data.publicado == true );
+          allow create, update: if request.auth != null
+            && esProfe()
+            && request.auth.uid in padre().members
+            && ( !esDocente() || padre().ownerUid == request.auth.uid )
+            && request.resource.data.keys().hasOnly(['i', 'data'])
+            && request.resource.data.i is int
+            && request.resource.data.data is string
+            && request.resource.data.data.size() <= 700000;
+          allow delete: if request.auth != null
+            && request.auth.uid in padre().members
+            && ( !esDocente() || padre().ownerUid == request.auth.uid );
+        }
+      }
+
+      // ---- Exámenes de una materia de docente ----
+      function esDuenoMateria() {
+        return get(/databases/$(database)/documents/temarios/$(id)).data.ownerUid == request.auth.uid;
+      }
+      function esMiembroMateria() {
+        return request.auth.uid in get(/databases/$(database)/documents/temarios/$(id)).data.members;
+      }
+
+      // Las preguntas NO traen la respuesta correcta. Los estudiantes solo ven los publicados o cerrados.
+      match /examenes/{exId} {
+        allow read: if request.auth != null
+          && ( esDuenoMateria()
+               || ( esMiembroMateria() && resource.data.estado in ['publicado', 'cerrado'] ) );
+        allow write: if request.auth != null && esDuenoMateria();
+      }
+
+      // ---- Calendario de la materia de docente ----
+      // El docente (dueño) crea, edita y borra eventos; todos los miembros de la materia los leen.
+      match /eventos/{evId} {
+        function eventoValido() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['title', 'date', 'type', 'hora', 'nota', 'by', 'creado', 'actualizado'])
+            && d.title is string && d.title.size() > 0 && d.title.size() <= 120
+            && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && d.type in ['ex', 'en', 'ac', 'ot']
+            && d.get('hora', '') is string && d.get('hora', '').matches('^([0-9]{2}:[0-9]{2})?$')
+            && d.get('nota', '') is string && d.get('nota', '').size() <= 500
+            && d.get('by', '') is string && d.get('by', '').size() <= 80;
+        }
+        allow read: if request.auth != null && esMiembroMateria();
+        allow create, update: if request.auth != null && esDuenoMateria() && eventoValido();
+        allow delete: if request.auth != null && esDuenoMateria();
+      }
+
+      // La clave (respuestas correctas): el docente siempre; el estudiante SOLO después de entregar.
+      match /claves/{exId} {
+        allow read: if request.auth != null
+          && ( esDuenoMateria()
+               || ( esMiembroMateria()
+                    && exists(/databases/$(database)/documents/temarios/$(id)/intentos/$(exId + '_' + request.auth.uid)) ) );
+        allow write: if request.auth != null && esDuenoMateria();
+      }
+
+      // Hora de inicio de cada estudiante en un examen con tiempo límite. Se crea una sola vez (la hora la pone el servidor)
+      // y el estudiante no puede borrarla ni cambiarla; solo el docente (por ejemplo, para permitir repetir).
+      match /inicios/{inId} {
+        allow read: if request.auth != null
+          && ( esDuenoMateria() || resource.data.uid == request.auth.uid );
+        allow create: if request.auth != null
+          && esMiembroMateria() && !esDuenoMateria()
+          && request.resource.data.keys().hasOnly(['examId', 'uid', 'nombre', 'inicio'])
+          && request.resource.data.uid == request.auth.uid
+          && inId == request.resource.data.examId + '_' + request.auth.uid
+          && request.resource.data.inicio == request.time
+          && get(/databases/$(database)/documents/temarios/$(id)/examenes/$(request.resource.data.examId)).data.estado == 'publicado'
+          && ( get(/databases/$(database)/documents/temarios/$(id)/examenes/$(request.resource.data.examId)).data.get('cierre', 0) == 0
+               || request.time.toMillis() <= get(/databases/$(database)/documents/temarios/$(id)/examenes/$(request.resource.data.examId)).data.cierre );
+        allow update, delete: if request.auth != null && esDuenoMateria();
+      }
+
+      // Entregas: una por estudiante y examen (el id lo fuerza). Se crean una vez y no se modifican,
+      // así la nota la calcula el docente sobre respuestas que el estudiante no puede alterar.
+      match /intentos/{inId} {
+        allow read: if request.auth != null
+          && ( esDuenoMateria() || resource.data.uid == request.auth.uid );
+        allow create: if request.auth != null
+          && esMiembroMateria() && !esDuenoMateria()
+          && request.resource.data.keys().hasOnly(['examId', 'uid', 'nombre', 'email', 'respuestas', 'enviado'])
+          && request.resource.data.uid == request.auth.uid
+          && inId == request.resource.data.examId + '_' + request.auth.uid
+          && request.resource.data.enviado == request.time
+          && get(/databases/$(database)/documents/temarios/$(id)/examenes/$(request.resource.data.examId)).data.estado == 'publicado'
+          && ( get(/databases/$(database)/documents/temarios/$(id)/examenes/$(request.resource.data.examId)).data.get('cierre', 0) == 0
+               || request.time.toMillis() <= get(/databases/$(database)/documents/temarios/$(id)/examenes/$(request.resource.data.examId)).data.cierre )
+          // Con tiempo límite: hace falta haber comenzado y entregar dentro del tiempo (con 60 s de margen por la red)
+          && ( get(/databases/$(database)/documents/temarios/$(id)/examenes/$(request.resource.data.examId)).data.get('duracion', 0) == 0
+               || ( exists(/databases/$(database)/documents/temarios/$(id)/inicios/$(request.resource.data.examId + '_' + request.auth.uid))
+                    && request.time.toMillis() <= get(/databases/$(database)/documents/temarios/$(id)/inicios/$(request.resource.data.examId + '_' + request.auth.uid)).data.inicio.toMillis()
+                         + get(/databases/$(database)/documents/temarios/$(id)/examenes/$(request.resource.data.examId)).data.duracion * 60000 + 60000 ) );
+        allow update: if false;
+        allow delete: if request.auth != null && esDuenoMateria();
+      }
+    }
+
+    // Invitaciones de docente a un correo. El id es  <idMateria>_<correo en minúsculas>
+    match /invitaciones/{inv} {
+
+      // El docente ve las que envió; el estudiante ve las dirigidas a su correo (verificado)
+      allow read: if request.auth != null && (
+        resource.data.ownerUid == request.auth.uid
+        || ( request.auth.token.email_verified == true
+             && resource.data.email == request.auth.token.email ) );
+
+      // Solo el dueño de la materia puede invitar a esa materia
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && get(/databases/$(database)/documents/temarios/$(request.resource.data.sid)).data.ownerUid == request.auth.uid
+        && inv == request.resource.data.sid + '_' + request.resource.data.email;
+
+      allow update: if request.auth != null && (
+        // El docente puede reenviar o corregir su invitación
+        ( resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == request.auth.uid )
+        ||
+        // La persona invitada solo puede aceptar o rechazar
+        ( request.auth.token.email_verified == true
+          && resource.data.email == request.auth.token.email
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'uid', 'nombre'])
+          && request.resource.data.estado in ['aceptada', 'rechazada'] )
+      );
+
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // Banco de preguntas del docente: solo lo ve y lo edita él. Sirve para reutilizar preguntas entre exámenes y semestres.
+    match /bancoPreguntas/{u}/items/{pid} {
+      allow read, delete: if request.auth != null && request.auth.uid == u;
+      allow create, update: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['enunciado', 'opciones', 'correcta', 'temaTitulo', 'corte', 'materia', 'creado'])
+        && request.resource.data.enunciado is string && request.resource.data.enunciado.size() <= 1000
+        && request.resource.data.opciones is list && request.resource.data.opciones.size() == 4
+        && request.resource.data.correcta is int && request.resource.data.correcta >= 0 && request.resource.data.correcta < 4;
+    }
+
+    // Cupo diario de archivos para la IA (día en hora de Colombia, UTC-5). La función de Netlify lo lee y lo sube de 1 en 1
+    // con el token de la propia persona; las reglas impiden bajarlo, borrarlo o reiniciarlo antes de medianoche.
+    match /iaUso/{u} {
+      function hoyCol() {
+        return math.floor((request.time.toMillis() - 18000000) / 86400000);
+      }
+      allow read: if request.auth != null && request.auth.uid == u;
+      allow create: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['dia', 'n'])
+        && request.resource.data.dia == hoyCol()
+        && request.resource.data.n == 1;
+      allow update: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['dia', 'n'])
+        && request.resource.data.dia == hoyCol()
+        && ( ( resource.data.dia == hoyCol() && request.resource.data.n == resource.data.n + 1 )
+             || ( resource.data.dia != hoyCol() && request.resource.data.n == 1 ) );
+      allow delete: if false;
+    }
+
+    // Trabajos de IA en segundo plano. La función de Netlify escribe aquí el resultado usando el
+    // token de la propia persona, así que solo puede tocar sus propios trabajos.
+    match /iaJobs/{job} {
+      allow create: if request.auth != null && esProfe() && request.resource.data.uid == request.auth.uid;   // solo profesores y admin usan la IA
+      allow read, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid;
+
+      // PDF escaneado, troceado en base64, que la función en segundo plano lee y borra al terminar.
+      match /entrada/{n} {
+        allow create, update: if request.auth != null
+          && esProfe()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['i', 'uid', 'data'])
+          && request.resource.data.i is int
+          && request.resource.data.data is string
+          && request.resource.data.data.size() <= 700000;
+        allow read, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      }
+    }
+  }
+}
