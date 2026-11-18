@@ -283,6 +283,7 @@ main#view{max-width:900px;margin:0 auto;padding:20px 16px 70px;animation:f .25s}
 
 /* Hecho por Sebastián Poveda y Santiago Romero. 2026 · cortes y carpetas */
 /* ===== Cortes como carpetas ===== */
+.pxEx{border:1px solid var(--b);border-radius:10px;background:var(--bg);padding:9px 12px;margin-bottom:6px;line-height:1.35}
 select.fld{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--b);border-radius:10px;padding:9px 12px;width:100%}
 .folder{background:var(--c);border:1px solid var(--b);border-radius:18px;margin-bottom:14px;overflow:hidden;box-shadow:0 14px 30px -24px rgba(60,40,20,.45)}
 .folder[open]{border-color:color-mix(in srgb,var(--a) 55%,var(--b))}
