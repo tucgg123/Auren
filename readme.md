@@ -38,6 +38,9 @@ Netlify publica la carpeta tal cual (no ejecuta el build).
 - Para comprobarlo a mano abre `https://TU-SITIO.netlify.app/.netlify/functions/generar-tema?diagnostico=1`: muestra qué variables existen (sí/no, nunca sus valores) y el proyecto al que apunta.
 
 ## Cosas que conviene saber
+- **Pregúntale a la IA**: en cada tema, los estudiantes tienen una pestaña de chat que responde con el contenido de ese tema (función `preguntar-tema`). Tiene un cupo diario por persona en Firestore (`iaChat/{uid}`), que se cambia con la variable `LIMITE_CHAT_DIARIO` (por defecto 15).
+- El docente puede dejar un **comentario** en la entrega de cada estudiante (solo lo ve ese estudiante) y publicar **anuncios** para toda la materia (pestaña 📣 Anuncios; llegan como aviso a la campana).
+- Flashcards: además de "No la sé" y "La sé" hay "Me costó" (vuelve pronto) y "Fácil" (tarda más en volver).
 - En cada materia, el estudiante tiene un tablero de apuntes tipo post-it (con título) y, dentro de cada tema, una pestaña "Mis apuntes". Ambos son privados.
 - Las imágenes de los temas se guardan comprimidas en Firestore (hasta ~700 KB cada una, máximo 12 imágenes o videos por tema). Los videos son enlaces; se incrustan los de YouTube y Vimeo.
 - El PDF comprimido pierde el texto seleccionable (la IA siempre lee el original). Es una copia para guardar o descargar.

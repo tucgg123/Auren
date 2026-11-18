@@ -200,6 +200,28 @@ service cloud.firestore {
         allow delete: if request.auth != null && esDuenoMateria();
       }
 
+      // Comentario del docente sobre la entrega de un estudiante. Id: <examId>_<uid>. Solo el docente escribe; el estudiante lee el suyo.
+      match /comentarios/{cId} {
+        allow read: if request.auth != null
+          && ( esDuenoMateria() || resource.data.uid == request.auth.uid );
+        allow create, update: if request.auth != null && esDuenoMateria()
+          && request.resource.data.keys().hasOnly(['examId', 'uid', 'texto', 'actualizado'])
+          && cId == request.resource.data.examId + '_' + request.resource.data.uid
+          && request.resource.data.texto is string && request.resource.data.texto.size() <= 1000;
+        allow delete: if request.auth != null && esDuenoMateria();
+      }
+
+      // Anuncios del docente para toda la materia: todos los miembros leen, solo el docente escribe.
+      match /anuncios/{aId} {
+        allow read: if request.auth != null && esMiembroMateria();
+        allow create: if request.auth != null && esDuenoMateria()
+          && request.resource.data.keys().hasOnly(['texto', 'by', 'creado'])
+          && request.resource.data.texto is string && request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 1000
+          && request.resource.data.get('by', '') is string && request.resource.data.get('by', '').size() <= 80;
+        allow update: if false;
+        allow delete: if request.auth != null && esDuenoMateria();
+      }
+
       // La clave (respuestas correctas): el docente siempre; el estudiante SOLO después de entregar.
       match /claves/{exId} {
         allow read: if request.auth != null
@@ -306,6 +328,24 @@ service cloud.firestore {
         && request.resource.data.dia == hoyCol()
         && ( ( resource.data.dia == hoyCol() && request.resource.data.n == resource.data.n + 1 )
              || ( resource.data.dia != hoyCol() && request.resource.data.n == 1 ) );
+      allow delete: if false;
+    }
+
+    // Cupo diario del chat "Pregúntale a la IA" (cualquier rol). Mismas reglas que iaUso: solo sube de 1 en 1.
+    match /iaChat/{u} {
+      function hoyColChat() {
+        return math.floor((request.time.toMillis() - 18000000) / 86400000);
+      }
+      allow read: if request.auth != null && request.auth.uid == u;
+      allow create: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['dia', 'n'])
+        && request.resource.data.dia == hoyColChat()
+        && request.resource.data.n == 1;
+      allow update: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['dia', 'n'])
+        && request.resource.data.dia == hoyColChat()
+        && ( ( resource.data.dia == hoyColChat() && request.resource.data.n == resource.data.n + 1 )
+             || ( resource.data.dia != hoyColChat() && request.resource.data.n == 1 ) );
       allow delete: if false;
     }
 
