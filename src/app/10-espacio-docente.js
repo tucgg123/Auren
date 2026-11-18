@@ -176,9 +176,44 @@ function docenteCard(m){
 function viewDocenteHTML(){
   const mats=state.materias.filter(m=>m.rol==='docente');
   return `<div class="viewhead"><h1>👩‍🏫 Espacio docente</h1><button class="pr" data-action="createDocente">+ Crear materia</button></div>
+    ${guiaHTML()}
     ${mats.length?`<div class="grid">${mats.map(docenteCard).join('')}</div>`
     :`<div class="empty">Aquí creas tus materias como docente: subes un PDF, la IA genera el tema y las tarjetas, tú los revisas y los publicas, e invitas a tus estudiantes por correo. Ellos las ven en su cuaderno, en solo lectura.</div>`}`;
 }
+/* ---------- Guía de primeros pasos ----------
+   Una lista corta según el rol, que se marca sola a medida que la persona usa la app. Desaparece al completarla
+   o al pulsar "Ocultar" (se guarda en el perfil, así no vuelve a salir en otro equipo). */
+function pasosGuia(){
+  if(esProfesor()){
+    const mats=state.materias.filter(m=>m.rol==='docente'),ids=new Set(mats.map(m=>m.id));
+    const temas=state.temas.filter(t=>ids.has(t.materiaId));
+    return[
+      {ok:mats.length>0,t:'Crea tu primera materia',d:'Con el botón «+ Crear materia» de arriba.'},
+      {ok:temas.length>0,t:'Sube un PDF y deja que la IA arme el tema',d:'Dentro de la materia, en «Contenido». La IA hace el resumen, el esquema y las tarjetas.'},
+      {ok:temas.some(t=>t.publicado),t:'Revisa y publica los temas',d:'Tus estudiantes solo ven los temas publicados (botón ✅ en cada tema).'},
+      {ok:mats.some(m=>nEstudiantes(m)>0||(invitMap[m.sharedId]||[]).length>0),t:'Invita a tus estudiantes',d:'En la pestaña «Estudiantes», con sus correos.'},
+      {ok:mats.some(m=>Object.keys(exMap[m.sharedId]||{}).length>0),t:'Crea tu primer examen',d:'En «Exámenes»: eliges los temas, revisas las preguntas y lo publicas.'}
+    ];
+  }
+  return[
+    {ok:state.materias.length>0,t:'Entra a la materia de tu profesor',d:'Acepta su invitación (te llega aquí arriba) o únete con el código que te dé.',accion:'joinSharedPrompt',btn:'🔗 Unirme con código'},
+    {ok:state.cards.some(c=>c.last),t:'Repasa tus primeras tarjetas',d:'Abre una materia y entra a «Flashcards». Auren te recordará cuándo repasar cada una.'},
+    {ok:(state.attempts||[]).length>0,t:'Pon a prueba lo que sabes',d:'Haz un quiz o un examen de práctica: si fallas, verás por qué.'},
+    {ok:(state.progress.days||[]).length>0,t:'Cumple tu primer día de racha',d:'Responde '+META_RACHA+' preguntas en un día para encender la racha 🔥.'}
+  ];
+}
+function guiaHTML(){
+  if(state.profile.guiaOculta)return '';
+  const pasos=pasosGuia(),hechos=pasos.filter(p=>p.ok).length;
+  if(hechos===pasos.length)return '';
+  const sig=pasos.findIndex(p=>!p.ok);
+  return `<div class="card guia" style="margin-bottom:14px">
+    <div class="row" style="justify-content:space-between;margin-top:0;align-items:center"><b>👋 Primeros pasos en Auren</b><span class="row" style="margin:0;gap:8px"><span class="chip">${hechos}/${pasos.length}</span><button type="button" class="sec sm" data-action="guiaOcultar">Ocultar</button></span></div>
+    <div class="bar mini" style="margin:8px 0 4px"><i style="width:${Math.round(hechos/pasos.length*100)}%"></i></div>
+    <ol class="guiaPasos">${pasos.map((p,i)=>`<li class="${p.ok?'ok':i===sig?'sig':''}"><span class="gIco" aria-hidden="true">${p.ok?'✅':i===sig?'👉':'○'}</span><div><b>${esc(p.t)}</b>${p.ok?'<span class="sr">(hecho)</span>':''}${i===sig?`<div class="meta" style="margin:2px 0 0">${esc(p.d)}</div>${p.accion?`<button type="button" class="sec sm" style="margin-top:6px" data-action="${p.accion}">${p.btn}</button>`:''}`:''}</div></li>`).join('')}</ol>
+  </div>`;
+}
+
 /* En materias de docente, el estudiante no puede editar el contenido compartido */
 function aplicarSoloLectura(){
   const m=route.view==='materiaDetail'?state.materias.find(x=>x.id===route.materiaId):null;

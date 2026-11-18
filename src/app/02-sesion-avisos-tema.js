@@ -141,7 +141,7 @@ function anunciarNuevos(m,tipo,items){
   if(!a.base[bk]){items.forEach(x=>{a.vistos[pre+x.id]=1});a.base[bk]=1;avGuardar();return}     // primera lectura: sin avisos
   const nuevos=items.filter(x=>!a.vistos[pre+x.id]);
   if(!nuevos.length)return;
-  const ico={tema:'📖',examen:'📝',evento:'🗓️'}[tipo]||'🔔',que={tema:'tema',examen:'examen',evento:'evento'}[tipo]||'aviso';
+  const ico={tema:'📖',examen:'📝',evento:'🗓️',anuncio:'📣'}[tipo]||'🔔',que={tema:'tema',examen:'examen',evento:'evento',anuncio:'anuncio'}[tipo]||'aviso';
   nuevos.forEach(x=>{
     a.vistos[pre+x.id]=1;
     if(avisosActivos())avAgregar({tipo,materiaId:m.id,texto:ico+' Nuevo '+que+' en '+m.name+': '+x.titulo,clave:pre+x.id});

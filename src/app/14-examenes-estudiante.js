@@ -134,6 +134,7 @@ function viewExamenDocHTML(){
         <div class="ringTxt"><b class="countUp" data-to="${r.ok}">${r.ok}</b><span>/ ${r.total}</span></div></div>
       <p class="resMsg">${msg}</p>
       <p class="meta">Nota: <b>${fmtN(r.nota)} / ${r.escala}</b> · ${r.pct}%</p>
+      ${(c=>c&&c.texto?`<div class="card shareBox" style="text-align:left;margin:10px 0"><b style="font-size:.9em">💬 Comentario de tu docente</b><p style="margin:4px 0 0;white-space:pre-wrap">${esc(c.texto)}</p></div>`:'')(comentarioDe(m,ex.id,currentUid))}
       ${exTom.racha?`<p class="meta" id="exRacha">🔥 Este examen sumó <b>${exTom.racha.aporte}</b> pregunta${exTom.racha.aporte==1?'':'s'} a tu racha de hoy (${exTom.racha.hoyRacha}/${META_RACHA})${exTom.racha.diaNuevo?' · ¡día de racha cumplido!':''}${exTom.racha.extra?' · '+exTom.racha.extra+' de práctica extra':''}.</p>`:''}
       <div class="resList">${r.det.map((d,i)=>`<div class="resRow ${d.acierto?'bien':'mal'}" style="--i:${Math.min(i,14)};margin-top:10px"><b>${i+1}. ${esc(d.q.enunciado)}</b>
         <div class="meta" style="margin:2px 0 0">${d.acierto?'✅':'❌'} Tu respuesta: <b>${esc(textoRespuesta(d.q,d.elegido)||'(sin responder)')}</b>${d.acierto?'':' · Correcta: <b>'+esc(textoRespuesta(d.q,d.correcta))+'</b>'}</div>${d.acierto?'':explicacionHTML(d.exp)}</div>`).join('')}</div>
@@ -290,6 +291,10 @@ document.addEventListener('click',async e=>{
       catch(err){console.error(err);UI.alerta('No se pudo quitar'+detalleError(err)+'.')}
     }
   }
+  else if(a==='guiaOcultar')mutate(s=>{s.profile.guiaOculta=true});
+  else if(a==='anuncioPublicar'&&m)publicarAnuncio(m);
+  else if(a==='anuncioBorrar'&&m)borrarAnuncio(m,b.dataset.an);
+  else if(a==='comGuardar'){const mm=materiaRuta();if(mm&&route.examId)guardarComentario(mm,route.examId,b.dataset.u)}
   else if(a==='segToggle'){segAbierto=!segAbierto;render(true)}
   else if(a==='exAddQ'&&exBuf){
     exBuf.preguntas.push({id:uid(),enunciado:'',opciones:['','','',''],correcta:0,tipo:'mc',dif:'media',temaId:'',temaTitulo:''});

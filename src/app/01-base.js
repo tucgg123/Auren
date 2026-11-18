@@ -510,6 +510,54 @@ function apuntesHTML(t){
     <p class="meta" style="margin:6px 0 0"><span id="notaSt-${t.id}" role="status"></span></p>`;
 }
 
+/* ======================= Pregúntale a la IA =======================
+   Chat sobre UN tema: la IA responde usando solo el contenido de ese tema (netlify/functions/preguntar-tema.js).
+   Lo usan los estudiantes, con un cupo diario pequeño. La conversación no se guarda: vive mientras la página esté abierta. */
+const chatIA={};                         // temaId -> {msgs:[{r:'u'|'ia',t}], cargando, err, cupo}
+const CHAT_SUGERENCIAS=['Explícamelo más fácil','Dame un ejemplo','¿Qué es lo más importante de este tema?','Hazme una pregunta para practicar'];
+function chatHTML(t){
+  const c=chatIA[t.id]||{msgs:[]};
+  const burbujas=c.msgs.map(m=>`<div class="chatMsg ${m.r==='u'?'yo':'ia'}"><small>${m.r==='u'?'Tú':'🤖 Tutor'}</small>${esc(m.t).replace(/\n/g,'<br>')}</div>`).join('');
+  return `<p class="meta" style="margin:0 0 8px">Pregunta lo que no entiendas de este tema. La IA responde con el contenido del tema, pero puede equivocarse: compárala con tu material.${c.cupo?` Te quedan <b>${c.cupo.restantes}</b> de ${c.cupo.limite} preguntas hoy.`:''}</p>
+    <div class="chatLog" role="log" aria-live="polite" aria-label="Conversación con el tutor">${burbujas||'<p class="meta" style="margin:0">Aún no has preguntado nada. Prueba con una de estas:</p>'}${c.cargando?'<div class="chatMsg ia pensando"><small>🤖 Tutor</small>Pensando…</div>':''}</div>
+    ${!c.msgs.length&&!c.cargando?`<div class="row" style="flex-wrap:wrap;margin:8px 0 0">${CHAT_SUGERENCIAS.map(x=>`<button type="button" class="toggleChip" data-chatsug="${esc(x)}" data-id="${t.id}">${esc(x)}</button>`).join('')}</div>`:''}
+    ${c.err?`<p class="meta" role="alert" style="color:var(--no);margin:8px 0 0">⚠️ ${esc(c.err)}</p>`:''}
+    <div class="chatIn"><input class="fld" id="chatIn-${t.id}" data-chat="${t.id}" maxlength="500" autocomplete="off" aria-label="Tu pregunta sobre ${esc(t.title)}" placeholder="Escribe tu duda…" ${c.cargando?'disabled':''}>
+      <button type="button" class="pr" data-chatsend="${t.id}" ${c.cargando?'disabled':''}>Enviar</button></div>`;
+}
+async function chatEnviar(temaId,texto){
+  const t=state.temas.find(x=>x.id===temaId);if(!t||!auth.currentUser)return;
+  const c=chatIA[temaId]=chatIA[temaId]||{msgs:[]};
+  const pregunta=String(texto||'').trim().slice(0,500);
+  if(!pregunta||c.cargando)return;
+  const historial=c.msgs.slice(-6);
+  c.msgs.push({r:'u',t:pregunta});c.cargando=true;c.err='';
+  const inp=$('chatIn-'+temaId);if(inp)inp.value='';
+  render(true);
+  try{
+    const token=await auth.currentUser.getIdToken();
+    const r=await fetch('/.netlify/functions/preguntar-tema',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},
+      body:JSON.stringify({titulo:t.title||'',texto:textoTema(t),pregunta,historial})});
+    const d=await r.json().catch(()=>({}));
+    if(d.cupo)c.cupo=d.cupo;
+    if(!r.ok||!d.respuesta){c.err=d.error||('La IA no respondió (error '+r.status+').');c.msgs.pop()}
+    else c.msgs.push({r:'ia',t:d.respuesta});
+  }catch(e){console.error(e);c.err='No se pudo contactar a la IA. Revisa tu conexión.';c.msgs.pop()}
+  c.cargando=false;
+  render(true);
+  const log=document.querySelector(`[data-tema="${temaId}"] .chatLog`);if(log)log.scrollTop=log.scrollHeight;
+  if(c.err){const i=$('chatIn-'+temaId);if(i&&!i.value)i.value=pregunta}
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest&&e.target.closest('[data-chatsend],[data-chatsug]');if(!b)return;
+  if(b.dataset.chatsend){const i=$('chatIn-'+b.dataset.chatsend);chatEnviar(b.dataset.chatsend,i&&i.value)}
+  else chatEnviar(b.dataset.id,b.dataset.chatsug);
+});
+document.addEventListener('keydown',e=>{
+  const i=e.target;if(!i||!i.dataset||!i.dataset.chat||e.key!=='Enter'||e.isComposing)return;
+  e.preventDefault();chatEnviar(i.dataset.chat,i.value);
+});
+
 /* ======================= Racha con los exámenes del profesor =======================
    Cada examen del profesor que se entrega suma las preguntas respondidas a la meta diaria, igual que un quiz o un examen propio. */
 function registrarExamenProfesor(m,ex){

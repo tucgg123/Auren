@@ -156,11 +156,14 @@ const LEITNER=[0,1,2,4,8,16];
 const hoyStr=()=>fechaLocal(new Date());
 function sumarDias(f,n){const d=new Date(f+'T00:00');d.setDate(d.getDate()+n);return fechaLocal(d)}
 function tarjetaPendiente(c,hoy){return !c.due||c.due<=(hoy||hoyStr())}
-function repasarTarjeta(c,acierto){
+/* calidad (solo si acertó): 'dificil' = me costó (no sube de caja y vuelve pronto), 'bien' = normal, 'facil' = salta una caja */
+function repasarTarjeta(c,acierto,calidad){
   const hoy=hoyStr(),pendiente=tarjetaPendiente(c,hoy);
   c.lastOk=!!acierto;c.last=hoy;
   if(!acierto){c.box=1;c.due=sumarDias(hoy,1);c.fails=(c.fails||0)+1;return}
-  if(pendiente){c.box=Math.min(5,(c.box||0)+1);c.due=sumarDias(hoy,LEITNER[c.box])}
+  if(!pendiente)return;
+  if(calidad==='dificil'){c.box=Math.max(1,c.box||0);c.due=sumarDias(hoy,Math.max(1,Math.round(LEITNER[c.box]/2)));return}
+  c.box=Math.min(5,(c.box||0)+(calidad==='facil'?2:1));c.due=sumarDias(hoy,LEITNER[c.box]);
 }
 /* Sesión de hoy: primero las vencidas (las más atrasadas antes) y luego unas pocas nuevas, hasta 20 en total */
 function sesionHoy(materiaId,max){
@@ -339,9 +342,11 @@ function toolFlashcardsHTML(titulo){
     <div class="fcInner" aria-hidden="true"><div class="fcFace fcFront">${esc(c.front)}</div><div class="fcFace fcBack">${esc(c.back)}</div></div>
   </div>
   <p class="meta" style="text-align:center">Tocá la tarjeta para voltear</p>
-  <div class="row" style="justify-content:center">
-    <button class="sec" data-action="cardAnswer" data-know="0">😕 Repasar</button>
-    <button class="pr" data-action="cardAnswer" data-know="1">😊 La sé</button>
+  <div class="row fcResp" style="justify-content:center;flex-wrap:wrap" role="group" aria-label="¿Qué tan bien te la sabías?">
+    <button class="sec" data-action="cardAnswer" data-know="0" title="Vuelve mañana">😕 No la sé</button>
+    <button class="sec" data-action="cardAnswer" data-know="1" data-cal="dificil" title="Acertaste, pero vuelve pronto">🤔 Me costó</button>
+    <button class="pr" data-action="cardAnswer" data-know="1" data-cal="bien" title="Sube una caja">😊 La sé</button>
+    <button class="sec" data-action="cardAnswer" data-know="1" data-cal="facil" title="Salta una caja: tarda más en volver">😎 Fácil</button>
   </div>`;
 }
 

@@ -246,7 +246,7 @@ document.addEventListener('click',async e=>{
     const know=b.dataset.know==='1';
     const c=toolState.cards[toolState.idx];
     const real=state.cards.find(x=>x.id===c.id);
-    if(real){real.known=know;repasarTarjeta(real,know);persist();avisarLogros(evaluarLogros());}
+    if(real){real.known=know;repasarTarjeta(real,know,b.dataset.cal||'bien');persist();avisarLogros(evaluarLogros());}
     toolState.seen++;if(know)toolState.known++;
     toolState.idx++;toolState.flipped=false;
     render();

@@ -60,6 +60,7 @@ function viewMateriasHTML(){
     <div class="viewhead"><div><h1>Mis materias</h1><p class="sub">${pluralMv(sems.length,'carpeta','carpetas')} y ${pluralMv(todas.length,'materia','materias')}</p></div>
       <span class="row" style="margin:0"><button class="sec" data-action="semDlg">📈 Promedio por carpeta</button><button class="pr" data-action="addSemester">+ Carpeta</button></span></div>
     ${invitacionesHTML()}
+    ${guiaHTML()}
     ${repasoHoyHTML()}
     ${sems.length?'':'<div class="empty">Aún no tienes carpetas. Crea una (por ejemplo, «Primer semestre») para empezar a organizar tus materias.</div>'}
     <div class="folders">${sems.map(folderSemestreHTML).join('')}<button type="button" class="folder add" data-action="addSemester"><span><span class="fplus" aria-hidden="true">＋</span>Nueva carpeta</span></button></div>
@@ -150,7 +151,7 @@ function viewMateriaDetailHTML(materiaId){
   return `
     <button class="sec" data-action="${m.rol==='docente'?'backDocente':'backMaterias'}">${m.rol==='docente'?'← Espacio docente':'← '+esc(((state.semesters.find(s=>s.id===m.semesterId&&!s.oculto))||{}).name||'Mis materias')}</button>
     <div class="hero" style="--mc:${matColor(m)}"><div class="heroDot"></div><div><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1><p class="sub">${esc((state.semesters.find(x=>x.id===m.semesterId)||{}).name||'')}${state.semesters.find(x=>x.id===m.semesterId)?' · ':''}${pluralMv(state.temas.filter(x=>x.materiaId===m.id).length,'tema','temas')} · ${pluralMv(getCardsTodas(m.id).length,'tarjeta','tarjetas')}${m.semestre?` · <span class="chip">Semestre ${m.semestre}${m.curso?' · Curso '+esc(m.curso):''}</span>`:''}</p></div></div>
-    ${m.rol==='docente'?docentePanelHTML(m):m.rol==='estudiante'?estudianteDocenteBoxHTML(m)+docsOriginalesHTML(m)+examenesEstudianteHTML(m):compartidoBoxHTML(m)}
+    ${m.rol==='docente'?docentePanelHTML(m):m.rol==='estudiante'?estudianteDocenteBoxHTML(m)+anunciosEstudianteHTML(m)+docsOriginalesHTML(m)+examenesEstudianteHTML(m):compartidoBoxHTML(m)}
 
     <section class="estudiarSec">
       <div class="viewhead"><h2>🎯 Estudiar</h2></div>
@@ -416,7 +417,9 @@ function temaBlock(t){
   if(tab==='esquema'&&!hasSec)tab='contenido';
   const conApuntes=!esProfesor()&&(state.materias.find(x=>x.id===t.materiaId)||{}).rol==='estudiante';
   if(tab==='apuntes'&&!conApuntes)tab='contenido';
-  const tabs=[['contenido','Contenido'],...(hasSec?[['esquema','Esquema']]:[]),['tarjetas',`Tarjetas <span class="chip">${cards.length}</span>`],...(conApuntes?[['apuntes','📝 Mis apuntes']]:[])];
+  const conChat=!esProfesor();
+  if(tab==='chat'&&!conChat)tab='contenido';
+  const tabs=[['contenido','Contenido'],...(hasSec?[['esquema','Esquema']]:[]),['tarjetas',`Tarjetas <span class="chip">${cards.length}</span>`],...(conApuntes?[['apuntes','📝 Mis apuntes']]:[]),...(conChat?[['chat','🤖 Pregúntale']]:[])];
   return `<details class="s" data-tema="${t.id}" ${ui.open[t.id]?'open':''}>
     <summary><span class="temaHead"><span class="tt">📝 ${esc(t.title)||'(tema sin título)'}</span><span class="chips">${esDocenteMat(t.materiaId)?`<span class="chip ${t.publicado?'chipOk':''}">${t.publicado?'✅ Publicado':'📝 Borrador'}</span>`:''}${t.by&&sharedMateria(t.materiaId)?`<span class="chip" title="${esc(t.fuente||'')}">👤 ${esc(t.by)}</span>`:''}${hasSec?`<span class="chip">${t.secciones.length} sección${t.secciones.length==1?'':'es'}</span>`:''}<span class="chip">${cards.length} tarjeta${cards.length==1?'':'s'}</span></span></span>
       ${t.archivo?`<button class="icon-btn" data-action="descargarOriginal" data-id="${t.id}" title="Descargar documento original" aria-label="Descargar documento original">⬇️</button>`:''}${esDocenteMat(t.materiaId)?`<button class="icon-btn" data-action="togglePublicar" data-id="${t.id}" title="${t.publicado?'Pasar a borrador':'Publicar a los estudiantes'}">${t.publicado?'📝':'✅'}</button>`:''}<button class="icon-btn" data-action="delTema" data-id="${t.id}" title="Eliminar tema">🗑️</button>
@@ -442,6 +445,7 @@ function temaBlock(t){
         <button class="sec" data-action="addCard" data-tema="${t.id}" data-mat="${t.materiaId}">+ Agregar tarjeta</button>
       </div>
       ${conApuntes?`<div class="tp" data-panel="apuntes" ${tab==='apuntes'?'':'hidden'}>${apuntesHTML(t)}</div>`:''}
+      ${conChat?`<div class="tp" data-panel="chat" ${tab==='chat'?'':'hidden'}>${chatHTML(t)}</div>`:''}
     </div>
   </details>`;
 }

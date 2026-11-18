@@ -42,6 +42,9 @@ Netlify también ejecuta `npm run build` en cada despliegue, así que lo publica
 ## Cosas que conviene saber
 - El dibujo de circuitos del fondo está en `fondo-circuito.svg` y solo se descarga en pantallas de más de 760 px con los efectos activados; en celulares no se carga.
 - Accesibilidad: enlace "Saltar al contenido" para teclado, foco visible en todos los botones y las flashcards se voltean con Enter o Espacio.
+- **Pregúntale a la IA**: en cada tema, los estudiantes tienen una pestaña de chat que responde con el contenido de ese tema (función `preguntar-tema`). Tiene un cupo diario por persona en Firestore (`iaChat/{uid}`), que se cambia con la variable `LIMITE_CHAT_DIARIO` (por defecto 15).
+- El docente puede dejar un **comentario** en la entrega de cada estudiante (solo lo ve ese estudiante) y publicar **anuncios** para toda la materia (pestaña 📣 Anuncios; llegan como aviso a la campana).
+- Flashcards: además de "No la sé" y "La sé" hay "Me costó" (vuelve pronto) y "Fácil" (tarda más en volver).
 - El cuaderno de cada estudiante se guarda por partes: lo general en `users/{uid}` y cada materia en `users/{uid}/materias/{id}`. Solo se sube lo que cambió, así estudiar en dos equipos ya no borra lo del otro (salvo que se edite la **misma** materia en ambos a la vez). Las cuentas antiguas se pasan solas al formato nuevo.
 - El límite de archivos por hora para la IA se guarda en Firestore (`iaHora/{uid}`), igual que el cupo diario. Se cambia con la variable `LIMITE_IA_HORA` en Netlify (por defecto 30).
 - En cada materia, el estudiante tiene un tablero de apuntes tipo post-it (con título) y, dentro de cada tema, una pestaña "Mis apuntes". Ambos son privados.

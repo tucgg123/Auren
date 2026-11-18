@@ -9,7 +9,7 @@
    La nota "oficial" la calcula el panel del docente a partir de esas respuestas inmutables, así
    que un estudiante no puede inventarse su calificación.
    ====================================================================== */
-const exMap={},clMap={},inMap={};      // sid -> datos en vivo
+const exMap={},clMap={},inMap={},comMap={},anMap={};      // sid -> datos en vivo
 const pendClave=new Set();
 let docTab='contenido',docTabMat=null;
 let exBuf=null,exGuardarT=null;        // examen que el docente está editando
@@ -85,9 +85,66 @@ function escucharExamenes(m){
   if(prof)u.push(base.collection('claves').onSnapshot(snap=>{
     clMap[sid]={};snap.docs.forEach(d=>{clMap[sid][d.id]={id:d.id,...d.data()}});renderSeguro();
   },aviso('claves')));
+  // Comentarios del docente sobre cada entrega (el estudiante solo ve los suyos)
+  const colCom=base.collection('comentarios');
+  u.push((prof?colCom:colCom.where('uid','==',currentUid)).onSnapshot(snap=>{
+    comMap[sid]={};snap.docs.forEach(d=>{comMap[sid][d.id]={id:d.id,...d.data()}});renderSeguro();
+  },aviso('comentarios')));
+  // Anuncios de la materia (los escribe el docente; todos los miembros los leen)
+  u.push(base.collection('anuncios').onSnapshot(snap=>{
+    anMap[sid]={};snap.docs.forEach(d=>{anMap[sid][d.id]={id:d.id,...d.data()}});renderSeguro();
+    if(!prof)anunciarNuevos(m,'anuncio',snap.docs.map(d=>({id:d.id,titulo:String(d.data().texto||'').slice(0,60)})));
+  },aviso('anuncios')));
   return u;
 }
-function limpiarExamenes(sid){delete exMap[sid];delete clMap[sid];delete inMap[sid];delete iniMap[sid];delete evMap[sid]}
+function limpiarExamenes(sid){delete exMap[sid];delete clMap[sid];delete inMap[sid];delete iniMap[sid];delete evMap[sid];delete comMap[sid];delete anMap[sid]}
+
+/* ======================= Comentarios del docente y anuncios =======================
+   comentarios/{examId_uid}: lo que el docente le escribe a un estudiante sobre su entrega (solo ellos dos lo leen).
+   anuncios/{id}: mensajes del docente para toda la materia. */
+const COMENTARIO_MAX=1000,ANUNCIO_MAX=1000;
+function comentarioDe(m,exId,u){return (comMap[m.sharedId]||{})[exId+'_'+u]||null}
+function anunciosDe(m){return Object.values(anMap[m.sharedId]||{}).sort((a,b)=>ms(b.creado)-ms(a.creado))}
+async function guardarComentario(m,exId,u){
+  const el=$('comTx-'+u);if(!el)return;
+  const texto=el.value.trim().slice(0,COMENTARIO_MAX),ref=baseDe(m).collection('comentarios').doc(exId+'_'+u);
+  try{
+    if(texto)await ref.set({examId:exId,uid:u,texto,actualizado:firebase.firestore.FieldValue.serverTimestamp()});
+    else await ref.delete();
+    toast(texto?'💬 Comentario guardado':'Comentario borrado');
+  }catch(e){console.error(e);UI.alerta('No se pudo guardar el comentario'+detalleError(e)+'. ¿Publicaste las reglas nuevas de Firestore?')}
+}
+async function publicarAnuncio(m){
+  const el=$('anuncioTx');if(!el)return;
+  const texto=el.value.trim().slice(0,ANUNCIO_MAX);if(!texto)return;
+  try{
+    await baseDe(m).collection('anuncios').add({texto,by:miNombre(),creado:firebase.firestore.FieldValue.serverTimestamp()});
+    el.value='';toast('📣 Anuncio publicado');
+  }catch(e){console.error(e);UI.alerta('No se pudo publicar el anuncio'+detalleError(e)+'. ¿Publicaste las reglas nuevas de Firestore?')}
+}
+async function borrarAnuncio(m,id){
+  if(!await UI.confirmar('¿Borrar este anuncio? Tus estudiantes dejarán de verlo.'))return;
+  try{await baseDe(m).collection('anuncios').doc(id).delete()}catch(e){console.error(e);UI.alerta('No se pudo borrar'+detalleError(e)+'.')}
+}
+function anuncioHTML(a,borrable,m){
+  return `<div class="anuncio"><div class="row" style="justify-content:space-between;margin:0;align-items:flex-start"><span class="meta" style="margin:0">${a.by?esc(a.by)+' · ':''}${ms(a.creado)?esc(fmtFechaHora(ms(a.creado))):'ahora'}</span>${borrable?`<button class="icon-btn" data-action="anuncioBorrar" data-id="${m.id}" data-an="${a.id}" title="Borrar anuncio" aria-label="Borrar anuncio">🗑️</button>`:''}</div>
+    <p style="margin:4px 0 0;white-space:pre-wrap">${esc(a.texto)}</p></div>`;
+}
+function docenteAnunciosHTML(m){
+  const ans=anunciosDe(m);
+  return `<div class="card">
+    <h3 style="margin-top:0">📣 Nuevo anuncio</h3>
+    <p class="meta" style="margin:0 0 8px">Lo verán todos los estudiantes de la materia al entrar, y les llega como aviso en la campana 🔔.</p>
+    <textarea class="fld" id="anuncioTx" rows="3" maxlength="${ANUNCIO_MAX}" placeholder="Por ejemplo: mañana la clase es en el laboratorio 3." aria-label="Texto del anuncio"></textarea>
+    <div class="row"><button class="pr" data-action="anuncioPublicar" data-id="${m.id}">Publicar anuncio</button></div>
+  </div>
+  ${ans.length?ans.map(a=>`<div class="card" style="margin-top:8px">${anuncioHTML(a,true,m)}</div>`).join(''):'<div class="empty">Todavía no has publicado anuncios.</div>'}`;
+}
+function anunciosEstudianteHTML(m){
+  const ans=anunciosDe(m).slice(0,3);
+  if(!ans.length)return '';
+  return `<div class="card shareBox" style="margin-top:12px"><b style="font-size:.9em">📣 Anuncios de tu docente</b>${ans.map(a=>anuncioHTML(a,false,m)).join('')}</div>`;
+}
 
 /* ======================= EVENTOS DEL DOCENTE EN EL CALENDARIO ======================= */
 /* Viven en temarios/{sid}/eventos. El docente (dueño) escribe; los estudiantes de la materia solo leen. */
@@ -235,7 +292,7 @@ async function asegurarClave(m,exId){
 
 /* ======================= DOCENTE: pestañas de la materia ======================= */
 function docenteTabsHTML(m){
-  const tabs=[['contenido','📚 Contenido'],['examenes','📝 Exámenes'],['eventos','🗓️ Calendario'],['estudiantes','👥 Estudiantes']];
+  const tabs=[['contenido','📚 Contenido'],['examenes','📝 Exámenes'],['anuncios','📣 Anuncios'],['eventos','🗓️ Calendario'],['estudiantes','👥 Estudiantes']];
   return `<div class="tabsT docTabs" style="margin:14px 0">${tabs.map(([k,t])=>`<button type="button" data-action="docTab" data-tab="${k}" class="${docTab===k?'on':''}">${t}</button>`).join('')}</div>`;
 }
 function docentePanelHTML(m){
@@ -265,7 +322,7 @@ function viewDocenteTabHTML(m){
   return `<button class="sec" data-action="backDocente">← Mis materias</button>
     <div class="viewhead" style="margin-top:14px"><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1></div>
     ${docenteTabsHTML(m)}
-    ${docTab==='examenes'?docenteExamenesHTML(m):docTab==='eventos'?docenteEventosHTML(m):docenteEstudiantesHTML(m)}`;
+    ${docTab==='examenes'?docenteExamenesHTML(m):docTab==='anuncios'?docenteAnunciosHTML(m):docTab==='eventos'?docenteEventosHTML(m):docenteEstudiantesHTML(m)}`;
 }
 
 /* ---------- Seguimiento del grupo: junta todos los exámenes publicados de la materia ----------
@@ -588,7 +645,9 @@ function detalleEstudianteHTML(f,ex){
         const tag=esC&&esE?'✅ Su respuesta · correcta':esC?'✔ Respuesta correcta':esE?'❌ Su respuesta':'';
         return `<li class="${esC?'opC':esE?'opE':''}">${esc(o)}${tag?` <small>${tag}</small>`:''}</li>`}).join('')}</ul>
       ${d.elegido===undefined?'<div class="meta" style="margin:2px 0 0">Sin responder</div>':''}</div>`).join(''):'<p class="meta">No hay preguntas en este filtro.</p>'}
-    <div class="row"><button class="sec" data-action="exRepetir" data-u="${f.uid}">↩️ Permitir que lo repita</button></div></div>`;
+    <label class="lbl" for="comTx-${f.uid}">💬 Comentario para ${esc(f.nombre)} (solo lo ve este estudiante)</label>
+    <textarea class="fld" id="comTx-${f.uid}" rows="2" maxlength="${COMENTARIO_MAX}" placeholder="Por ejemplo: repasa el tema 2, confundiste los conceptos de…">${esc((comentarioDe(materiaRuta(),ex.id,f.uid)||{}).texto||'')}</textarea>
+    <div class="row"><button class="sec" data-action="comGuardar" data-u="${f.uid}">💬 Guardar comentario</button><button class="sec" data-action="exRepetir" data-u="${f.uid}">↩️ Permitir que lo repita</button></div></div>`;
 }
 function viewDocResultadosHTML(){
   const m=materiaRuta(),ex=m&&(exMap[m.sharedId]||{})[route.examId];

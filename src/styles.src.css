@@ -920,6 +920,27 @@ h1.brand .logoImg{margin-right:2px}
 .skip{position:absolute;left:12px;top:-60px;z-index:1000;background:var(--a);color:var(--on);padding:8px 14px;border-radius:10px;font-weight:600;text-decoration:none;transition:top .15s}
 .skip:focus{top:12px}
 .flashcard:focus-visible{outline-offset:6px;border-radius:18px}
+/* Pregúntale a la IA (chat sobre un tema) */
+.chatLog{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;padding:4px 2px}
+.chatMsg{max-width:88%;padding:8px 12px;border-radius:14px;line-height:1.45;white-space:normal;word-wrap:break-word}
+.chatMsg small{display:block;font-size:.75em;font-weight:600;color:var(--m);margin-bottom:2px}
+.chatMsg.yo{align-self:flex-end;background:var(--al);border-bottom-right-radius:4px}
+.chatMsg.ia{align-self:flex-start;background:var(--card);border:1px solid var(--b);border-bottom-left-radius:4px}
+.chatMsg.pensando{opacity:.7}
+.chatIn{display:flex;gap:8px;margin-top:10px}
+.chatIn .fld{flex:1;margin:0}
+
+/* Anuncios del docente */
+.anuncio{padding:8px 0;border-top:1px solid var(--b)}
+.anuncio:first-of-type{border-top:0}
+
+/* Guía de primeros pasos */
+.guiaPasos{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.guiaPasos li{display:flex;gap:10px;align-items:flex-start;padding:6px 8px;border-radius:10px}
+.guiaPasos li.ok b{color:var(--m);text-decoration:line-through;font-weight:500}
+.guiaPasos li.sig{background:var(--al)}
+.gIco{width:1.4em;text-align:center;flex:none}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 /* Explicación de una respuesta (quiz, examen del profesor) */
 .fbExp{display:block;font-weight:400;color:var(--t);margin-top:6px;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--a) 10%,transparent);border-left:3px solid var(--a);font-size:.95em;line-height:1.4}
 
