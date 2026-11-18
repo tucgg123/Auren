@@ -1,7 +1,9 @@
 [build]
   publish = "."
   functions = "netlify/functions"
-  # Sin paso de build en Netlify: assets/ ya viene construido en el repositorio (para regenerarlo: npm install && npm run build).
+  # Netlify instala esbuild (package.json) y arma assets/ en cada despliegue, así lo publicado siempre coincide con src/.
+  # assets/ también se guarda en el repositorio para poder abrir la página sin hacer el build.
+  command = "npm run build"
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "FIREBASE_API_KEY,FIREBASE_PROJECT_ID"
 [[headers]]

@@ -15,29 +15,33 @@ Esta versión es un proyecto **aparte** de la que ya funciona para los estudiant
 1. **Repositorio nuevo en GitHub** y sube esta carpeta (sin `node_modules`).
 2. **Proyecto de Firebase nuevo** (gratis): Authentication → activa *Google* y *Correo/contraseña*; Firestore Database → créala en modo producción.
 3. En *Configuración del proyecto → Tus apps → Web* copia las llaves y pégalas en **`firebase-init.js`** (reemplaza los textos `PEGA_AQUI`).
-4. **Firestore → Reglas**: pega el contenido de **`firestore.rules`** y pulsa *Publicar*. (Si quieres otro primer admin, cambia el correo en las reglas, en `src/app.src.js` (`ADMIN_SEMILLA`) y en las dos funciones de Netlify.)
+4. **Firestore → Reglas**: pega el contenido de **`firestore.rules`** y pulsa *Publicar*. (Si quieres otro primer admin, cambia el correo en `auren.config.json` y ejecuta `npm run build`.)
 5. **Netlify**: crea un sitio nuevo desde el repositorio nuevo. En *Environment variables* define:
    - `APIKEYGEMINIS`: tu llave de Gemini.
    - `FIREBASE_API_KEY` y `FIREBASE_PROJECT_ID`: los del proyecto nuevo.
    - `FIREBASE_SERVICE_ACCOUNT` *(solo para que el admin borre cuentas de otras personas)*: Firebase → Configuración → Cuentas de servicio → *Generar nueva clave privada* y pega **el JSON completo**. Sin esto todo funciona, pero ese botón avisará que falta configurarlo.
-   - `ADMIN_EMAIL` *(opcional, por defecto santiagoromerov2008@gmail.com)*.
+   - `ADMIN_EMAIL` *(opcional, por defecto el de `auren.config.json`)*.
 6. En Firebase → Authentication → Configuración → **Dominios autorizados** agrega el dominio del sitio de Netlify.
 7. Entra con `santiagoromerov2008@gmail.com` **con el correo verificado** (con Google ya lo está): nace como admin. Desde 🛡️ Admin asignas el rol *Profesor* a quien corresponda.
 
 ## Cómo se actualiza el código
-Se edita `src/app.src.js` y `src/styles.src.css`, luego:
+El código de la página está repartido por secciones en `src/app/` (`01-base.js`, `02-sesion-avisos-tema.js`, … `14-examenes-estudiante.js`). El build las une en ese orden dentro de una sola función, así que todas comparten sus variables como si fueran un solo archivo. Los estilos están en `src/styles.src.css`.
 ```
 npm install
 npm run build        # regenera assets/ (un solo app.*.js y un solo styles.*.css) y actualiza index.html
 git add -A && git commit -m "mensaje" && git push
 ```
-Netlify publica la carpeta tal cual (no ejecuta el build).
+Netlify también ejecuta `npm run build` en cada despliegue, así que lo publicado siempre sale de `src/`.
+
+**Correo del primer admin**: está en un solo lugar, `auren.config.json`. `npm run build` lo pone en la página y en `firestore.rules` (luego hay que volver a publicar las reglas en Firebase); las funciones de Netlify lo leen de ahí si no existe la variable `ADMIN_EMAIL`.
 
 ## Si la IA da error al subir un archivo
 - Si sale "La función de IA no respondió…", la propia página te dice qué falta (por ejemplo `FIREBASE_PROJECT_ID`) o a qué proyecto apunta Netlify. Corrígelo en *Site configuration → Environment variables* y **vuelve a desplegar** (*Deploys → Trigger deploy*): las funciones solo leen las variables al desplegarse.
 - Para comprobarlo a mano abre `https://TU-SITIO.netlify.app/.netlify/functions/generar-tema?diagnostico=1`: muestra qué variables existen (sí/no, nunca sus valores) y el proyecto al que apunta.
 
 ## Cosas que conviene saber
+- El dibujo de circuitos del fondo está en `fondo-circuito.svg` y solo se descarga en pantallas de más de 760 px con los efectos activados; en celulares no se carga.
+- Accesibilidad: enlace "Saltar al contenido" para teclado, foco visible en todos los botones y las flashcards se voltean con Enter o Espacio.
 - **Pregúntale a la IA**: en cada tema, los estudiantes tienen una pestaña de chat que responde con el contenido de ese tema (función `preguntar-tema`). Tiene un cupo diario por persona en Firestore (`iaChat/{uid}`), que se cambia con la variable `LIMITE_CHAT_DIARIO` (por defecto 15).
 - El docente puede dejar un **comentario** en la entrega de cada estudiante (solo lo ve ese estudiante) y publicar **anuncios** para toda la materia (pestaña 📣 Anuncios; llegan como aviso a la campana).
 - Flashcards: además de "No la sé" y "La sé" hay "Me costó" (vuelve pronto) y "Fácil" (tarda más en volver).

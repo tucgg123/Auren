@@ -242,7 +242,8 @@ async function sumarUso(uid, token, n) {
 // Rol: solo profesores y admin pueden usar la IA. Se lee usuarios/{uid} con el token de la propia persona (las reglas
 // de Firestore le dejan leer su propio documento). El primer admin es el correo semilla (cambia ADMIN_EMAIL en Netlify).
 // ---------------------------------------------------------------------------------------------
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'santiagoromerov2008@gmail.com').toLowerCase();
+// Primer admin: la variable ADMIN_EMAIL de Netlify si existe; si no, el correo de auren.config.json (el mismo que usan la página y las reglas)
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || require('../../auren.config.json').adminEmail || '').toLowerCase();
 async function leerRol(uid, token) {
   const r = await fetch('https://firestore.googleapis.com/v1/projects/' + PROYECTO + '/databases/(default)/documents/usuarios/' + uid,
     { headers: { authorization: 'Bearer ' + token } });

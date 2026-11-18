@@ -1,8 +1,12 @@
-/* Auren · build: minifica src/app.src.js y src/styles.src.css, les pone un hash en el nombre
-   (así el navegador los guarda en caché "para siempre" y se actualizan solos cuando cambian)
-   y apunta index.html a los archivos nuevos.
+/* Auren · build
+   1. Une las partes de src/app/ (en orden por nombre: 01-…, 02-…) dentro de una sola función, como era antes
+      src/app.src.js, y la minifica. También minifica src/styles.src.css.
+   2. Les pone un hash en el nombre (así el navegador los guarda en caché "para siempre" y se actualizan solos
+      cuando cambian) y apunta index.html a los archivos nuevos.
+   3. Pone el correo del primer admin (auren.config.json → adminEmail) en el código y en firestore.rules,
+      para que esté escrito en un solo lugar.
 
-   Uso:  npm install   y luego   npm run build
+   Uso:  npm install   y luego   npm run build      (Netlify lo ejecuta solo en cada despliegue)
    Si esbuild no está disponible, no hace nada y se quedan los archivos que ya están en assets/. */
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 let esbuild;
@@ -13,9 +17,11 @@ const raiz = __dirname, assets = path.join(raiz, 'assets');
 fs.mkdirSync(assets, { recursive: true });
 const hash = txt => crypto.createHash('sha256').update(txt).digest('hex').slice(0, 8);
 
-function construir(entrada, loader, prefijo, ext) {
-  const fuente = fs.readFileSync(path.join(raiz, entrada), 'utf8');
-  const min = esbuild.transformSync(fuente, { loader, minify: true, legalComments: 'inline' }).code;
+const config = JSON.parse(fs.readFileSync(path.join(raiz, 'auren.config.json'), 'utf8'));
+const adminEmail = String(config.adminEmail || '').trim().toLowerCase();
+if (!/^[^@\s'"]+@[^@\s'"]+$/.test(adminEmail)) { console.error('[build] auren.config.json: adminEmail no es un correo válido.'); process.exit(1); }
+
+function escribir(fuente, min, prefijo, ext) {
   const nombre = prefijo + '.' + hash(min) + '.' + ext;
   for (const f of fs.readdirSync(assets)) {
     if (f.startsWith(prefijo + '.') && f.endsWith('.' + ext) && f !== nombre) fs.unlinkSync(path.join(assets, f));
@@ -25,10 +31,28 @@ function construir(entrada, loader, prefijo, ext) {
   return nombre;
 }
 
-const js = construir('src/app.src.js', 'js', 'app', 'js');
-const css = construir('src/styles.src.css', 'css', 'styles', 'css');
+// JavaScript: las partes van dentro de una sola función para que compartan variables sin volverse globales
+const dirApp = path.join(raiz, 'src', 'app');
+const partes = fs.readdirSync(dirApp).filter(f => f.endsWith('.js')).sort();
+const fuenteJs = '/*! Hecho por Sebastián Poveda y Santiago Romero. 2026 — Auren · lógica principal */\n(()=>{\n'
+  + partes.map(f => '/* ---- ' + f + ' ---- */\n' + fs.readFileSync(path.join(dirApp, f), 'utf8')).join('')
+  + '})();\n';
+const minJs = esbuild.transformSync(fuenteJs, {
+  loader: 'js', minify: true, legalComments: 'inline',
+  define: { __ADMIN_EMAIL__: JSON.stringify(adminEmail) }
+}).code;
+const js = escribir(fuenteJs, minJs, 'app', 'js');
+
+const fuenteCss = fs.readFileSync(path.join(raiz, 'src', 'styles.src.css'), 'utf8');
+const css = escribir(fuenteCss, esbuild.transformSync(fuenteCss, { loader: 'css', minify: true, legalComments: 'inline' }).code, 'styles', 'css');
 
 const ruta = path.join(raiz, 'index.html');
 let html = fs.readFileSync(ruta, 'utf8');
 html = html.replace(/assets\/app\.[0-9a-f]{8}\.js/, 'assets/' + js).replace(/assets\/styles\.[0-9a-f]{8}\.css/, 'assets/' + css);
 fs.writeFileSync(ruta, html);
+
+// Reglas de Firestore: el correo del primer admin sale de auren.config.json
+const rutaReglas = path.join(raiz, 'firestore.rules');
+const reglas = fs.readFileSync(rutaReglas, 'utf8');
+const nuevas = reglas.replace(/(request\.auth\.token\.get\('email', ''\) == ')[^']*(')/, '$1' + adminEmail + '$2');
+if (nuevas !== reglas) { fs.writeFileSync(rutaReglas, nuevas); console.log('[build] firestore.rules: correo del admin actualizado (publícalas de nuevo en Firebase).'); }

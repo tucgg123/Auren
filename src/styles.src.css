@@ -914,6 +914,12 @@ h1.brand .logoImg{margin-right:2px}
 .scard em{position:absolute;right:14px;bottom:12px;font-style:normal;color:var(--c)}
 @media(prefers-reduced-motion:reduce){.dwBody,.dwInner,.folder{transition:none}}
 
+/* Accesibilidad: foco visible con teclado en todo lo que se puede pulsar, y enlace para saltar al contenido */
+:where(button,a,[role="button"],summary,select,[tabindex]):focus-visible{outline:2px solid var(--a);outline-offset:2px}
+#view:focus{outline:0}
+.skip{position:absolute;left:12px;top:-60px;z-index:1000;background:var(--a);color:var(--on);padding:8px 14px;border-radius:10px;font-weight:600;text-decoration:none;transition:top .15s}
+.skip:focus{top:12px}
+.flashcard:focus-visible{outline-offset:6px;border-radius:18px}
 /* Pregúntale a la IA (chat sobre un tema) */
 .chatLog{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;padding:4px 2px}
 .chatMsg{max-width:88%;padding:8px 12px;border-radius:14px;line-height:1.45;white-space:normal;word-wrap:break-word}
