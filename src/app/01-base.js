@@ -435,7 +435,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)pomoTick()
 const NOTA_MAX=20000;
 const notasMap={},notasPend={},notasTimers={};
 let notasUnsub=null;
-function detenerNotas(){notaEditId=null;if(notasUnsub){try{notasUnsub()}catch(e){}notasUnsub=null}Object.keys(notasMap).forEach(k=>delete notasMap[k]);Object.keys(notasPend).forEach(k=>delete notasPend[k])}
+function detenerNotas(){if(notasUnsub){try{notasUnsub()}catch(e){}notasUnsub=null}Object.keys(notasMap).forEach(k=>delete notasMap[k]);Object.keys(notasPend).forEach(k=>delete notasPend[k])}
 function escucharNotas(){
   detenerNotas();
   if(!currentUid||esProfesor())return;
@@ -464,41 +464,10 @@ function programarNota(id,materiaId,valor){
 }
 function vaciarNotasPendientes(){Object.keys(notasPend).forEach(id=>{clearTimeout(notasTimers[id]);const t=miTema(id);guardarNota(id,t&&t.materiaId)})}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)vaciarNotasPendientes()});
-/* ---- Apuntes por materia (tablero de notas tipo post-it): varias notas con título, solo visibles para su dueño ---- */
-let notaEditId=null;
-const notasDeMateria=mid=>Object.entries(notasMap).filter(([id,d])=>id.startsWith('n_')&&d&&d.materiaId===mid).map(([id,d])=>({id,...d})).sort((a,b)=>(b.actualizado||0)-(a.actualizado||0));
-const colorPostit=id=>[...String(id)].reduce((s,c)=>s+c.charCodeAt(0),0)%3;
-function notasMateriaHTML(m){
-  if(esProfesor()||m.rol!=='estudiante')return '';
-  const lista=notasDeMateria(m.id),ed=notaEditId&&notasMap[notaEditId]&&notasMap[notaEditId].materiaId===m.id?notasMap[notaEditId]:null;
-  return `<section class="apuntesSec">
-    <div class="viewhead"><h2>📝 Mis apuntes de la materia</h2><span class="meta">${pluralMv(lista.length,'apunte','apuntes')} · solo tú los ves</span></div>
-    <div class="apForm">
-      <label class="lbl" for="apT-${m.id}">Título</label><input class="fld" id="apT-${m.id}" maxlength="120" placeholder="Ej. Repasar el capítulo 3" value="${esc(ed?ed.titulo||'':'')}">
-      <label class="lbl" for="apX-${m.id}">Apunte</label><textarea class="fld" id="apX-${m.id}" rows="4" maxlength="${NOTA_MAX}" placeholder="Escribe aquí…">${esc(ed?ed.texto:'')}</textarea>
-      <div class="row" style="justify-content:flex-end;margin-top:8px">${ed?'<button type="button" class="sec" data-action="notaCancelar">Cancelar</button>':''}<button type="button" class="pr" data-action="notaGuardar" data-mat="${m.id}">${ed?'Actualizar':'Guardar apunte'}</button></div>
-    </div>
-    ${lista.length?`<div class="postits">${lista.map(n=>`<article class="postit p${colorPostit(n.id)}"><div class="pnx"><button type="button" data-action="notaEditar" data-id="${n.id}" aria-label="Editar apunte" title="Editar">✎</button><button type="button" data-action="notaBorrar" data-id="${n.id}" aria-label="Borrar apunte" title="Borrar">🗑</button></div><h4>${esc(n.titulo||'Sin título')}</h4><p>${esc(n.texto)}</p><time>${esc(fmtFechaHora(n.actualizado))}</time></article>`).join('')}</div>`:'<div class="empty">Todavía no tienes apuntes de esta materia.</div>'}
-  </section>`;
-}
-async function guardarNotaMateria(mid){
-  const ti=$('apT-'+mid),tx=$('apX-'+mid);
-  if(!ti||!tx||!currentUid)return;
-  const texto=tx.value.trim();
-  if(!texto){UI.alerta('Escribe algo en el apunte antes de guardarlo.');return}
-  const id=notaEditId&&notasMap[notaEditId]?notaEditId:'n_'+uid();
-  const d={materiaId:mid,titulo:ti.value.trim().slice(0,120),texto:texto.slice(0,NOTA_MAX),actualizado:Date.now()};
-  try{
-    await db.collection('anotaciones').doc(currentUid).collection('items').doc(id).set(d);
-    notasMap[id]=d;notaEditId=null;ti.value='';tx.value='';toast('✅ Apunte guardado');render(true);          // el repintado conserva lo escrito, por eso se vacía el formulario a mano
-  }catch(e){console.error(e);UI.alerta('No se pudo guardar el apunte'+detalleError(e)+'.')}
-}
-async function borrarNotaMateria(id){
-  const n=notasMap[id];if(!n||!currentUid)return;
-  if(!await UI.confirmar('¿Borrar el apunte "'+(n.titulo||'Sin título')+'"? No se puede deshacer.','Borrar'))return;
-  try{await db.collection('anotaciones').doc(currentUid).collection('items').doc(id).delete();delete notasMap[id];if(notaEditId===id)notaEditId=null;render(true)}
-  catch(e){console.error(e);UI.alerta('No se pudo borrar el apunte'+detalleError(e)+'.')}
-}
+/* ---- Apuntes de una materia: se cuentan los apuntes de sus temas (pestaña "Mis apuntes" de cada tema) ----
+   El tablero de notas sueltas por materia se quitó: los apuntes viven en cada tema. Las notas viejas del tablero
+   (id "n_…") siguen guardadas en anotaciones/, pero ya no se muestran ni se cuentan. */
+const notasDeMateria=mid=>Object.entries(notasMap).filter(([id,d])=>!id.startsWith('n_')&&d&&d.materiaId===mid&&String(d.texto||'').trim()).map(([id,d])=>({id,...d}));
 function esquemaTexto(t){
   if(!Array.isArray(t.secciones)||!t.secciones.length)return '';
   return t.secciones.map(sc=>'## '+(sc.title||'Sección')+'\n'+((typeof puntosDe==='function'?puntosDe(sc):[]).map(p=>'- '+p).join('\n'))).join('\n\n');

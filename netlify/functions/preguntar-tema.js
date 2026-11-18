@@ -9,8 +9,10 @@ const { llamarGemini, verificarUsuario, tokenDe, json } = util;
 
 const PROYECTO = process.env.FIREBASE_PROJECT_ID || '';
 const LIMITE_CHAT = Number(process.env.LIMITE_CHAT_DIARIO) || 15;
-const LIMITE_MS = 25000;
-const MAX_TEMA = 30000, MAX_PREGUNTA = 500, MAX_HISTORIAL = 6, MAX_MSG = 1200;
+// Netlify corta las funciones normales a los 60 s: se deja margen. Cada modelo tiene como mucho 20 s;
+// si no responde, se prueba el siguiente (los "lite" son más rápidos).
+const LIMITE_MS = 50000, POR_MODELO_MS = 20000;
+const MAX_TEMA = 15000, MAX_PREGUNTA = 500, MAX_HISTORIAL = 6, MAX_MSG = 1200;
 const diaColombia = () => Math.floor((Date.now() - 5 * 3600 * 1000) / 86400000);
 const urlChat = uid => 'https://firestore.googleapis.com/v1/projects/' + PROYECTO + '/databases/(default)/documents/iaChat/' + uid;
 
@@ -86,9 +88,10 @@ NUEVA PREGUNTA DEL ESTUDIANTE: ${pregunta}
 Devuelve EXCLUSIVAMENTE un JSON: {"respuesta":"tu respuesta"}`;
 
   try {
-    const resp = await llamarGemini(apiKey, prompt, LIMITE_MS, null, { esquema: ESQUEMA, maxTokens: 1024, temperatura: 0.5 });
-    if (!resp || !resp.ok) {
-      if (resp && resp.status === 429) return json(429, { error: 'La IA está ocupada ahora mismo. Espera un minuto y vuelve a preguntar.' });
+    const resp = await llamarGemini(apiKey, prompt, LIMITE_MS, null, { esquema: ESQUEMA, maxTokens: 2048, temperatura: 0.5, pensamiento: 'minimal', porModeloMs: POR_MODELO_MS });
+    if (!resp) return json(504, { error: 'La IA está muy ocupada en este momento y ningún modelo respondió a tiempo. Vuelve a intentarlo en un minuto.' });
+    if (!resp.ok) {
+      if (resp.status === 429) return json(429, { error: 'La IA está ocupada ahora mismo. Espera un minuto y vuelve a preguntar.' });
       return json(502, { error: 'La IA respondió con un error. Inténtalo de nuevo.' });
     }
     const data = await resp.json();

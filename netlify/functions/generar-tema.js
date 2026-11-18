@@ -90,20 +90,26 @@ async function llamarGemini(apiKey, prompt, limiteMs = LIMITE_MS, pdfBase64 = nu
   const inicio = Date.now();
   let ultima;
   for (const modelo of MODELOS) {
+    // opciones.porModeloMs: tiempo máximo con cada modelo. Si uno se demora, se pasa al siguiente en vez de
+    // gastar todo el tiempo esperando (el chat lo usa para no quedarse colgado con un modelo lento o saturado).
+    const finModelo = opciones.porModeloMs ? Date.now() + opciones.porModeloMs : Infinity;
     let usaPensamientoCorto = true; // thinkingLevel "low": razona menos y responde antes
     let usaEsquema = true;          // responseSchema: fuerza la forma exacta del JSON
     for (let intento = 0; intento < 4; intento++) {
       const restante = limiteMs - (Date.now() - inicio);
       if (restante < 3000) throw new Error('TIMEOUT');
+      const paraModelo = Math.min(restante, finModelo - Date.now());
+      if (paraModelo < 3000) break;                       // este modelo ya gastó su tiempo: siguiente
+      const cortaModelo = paraModelo < restante;
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), restante);
+      const timer = setTimeout(() => ctrl.abort(), paraModelo);
       const generationConfig = {
         responseMimeType: 'application/json',
         temperature: opciones.temperatura != null ? opciones.temperatura : 0.4,
         maxOutputTokens: opciones.maxTokens || 12288
       };
       if (usaEsquema) generationConfig.responseSchema = esquema;
-      if (usaPensamientoCorto) generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+      if (usaPensamientoCorto) generationConfig.thinkingConfig = { thinkingLevel: opciones.pensamiento || 'low' };
       let resp;
       try {
         resp = await fetch(
@@ -127,7 +133,10 @@ async function llamarGemini(apiKey, prompt, limiteMs = LIMITE_MS, pdfBase64 = nu
           }
         );
       } catch (e) {
-        if (e.name === 'AbortError') throw new Error('TIMEOUT');
+        if (e.name === 'AbortError') {
+          if (cortaModelo) { console.error('El modelo', modelo, 'tardó más de', opciones.porModeloMs, 'ms: se prueba el siguiente'); break; }
+          throw new Error('TIMEOUT');
+        }
         throw e;
       } finally {
         clearTimeout(timer);
