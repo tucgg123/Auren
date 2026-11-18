@@ -2229,7 +2229,7 @@ function viewPerfilHTML(){
       <label class="lbl">Nombre</label><input class="fld" data-action="profileField" data-f="name" value="${esc(p.name)}" maxlength="40">
       <label class="lbl">Carrera y universidad</label><input class="fld" data-action="profileField" data-f="career" value="${esc(p.career)}" maxlength="80">
       <div class="two">
-        <div><label class="lbl">Próximo examen</label><input class="fld" type="date" data-action="profileField" data-f="examDate" value="${p.examDate||''}"></div>
+        <div><label class="lbl">Próximo examen</label>${proxExamenHTML()}</div>
         <div><label class="lbl">Escala de notas</label><select class="fld" data-action="setScale">${[5,10,100].map(n=>`<option value="${n}" ${scaleMax()===n?'selected':''}>0 a ${n}</option>`).join('')}</select></div>
       </div>
       <div class="two">
@@ -4343,6 +4343,12 @@ function eventosDocentes(){
 const eventosTodos=()=>state.events.concat(eventosDocentes());
 const tipoEv=t=>(TIPOS_EV.find(x=>x[0]===t)||['','📌 Otro'])[1];
 const sortEv=(a,b)=>a.date.localeCompare(b.date)||(a.hora||'99').localeCompare(b.hora||'99');
+/* Perfil: el próximo examen sale del calendario (eventos propios y de los docentes con tipo "Examen") */
+function proxExamenHTML(){
+  const hoy=ymd(new Date()),ex=eventosTodos().filter(e=>e.type==='ex'&&e.date>=hoy).sort(sortEv)[0];
+  if(!ex)return '<div class="pxEx"><span class="meta">Sin exámenes en el calendario</span></div>';
+  return `<div class="pxEx"><b>${esc(ex.title)}</b>${ex.hora?` <small>🕒 ${esc(ex.hora)}</small>`:''}<br><small class="meta">${ex.materia?esc(ex.materia)+' · ':''}${esc(fmtDateLong(ex.date))} · ${relDate(ex.date)}</small></div>`;
+}
 
 /* Fila de un evento del docente (calendario del estudiante y del docente) */
 function evDocFilaHTML(e,conMateria){
