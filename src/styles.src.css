@@ -913,3 +913,15 @@ h1.brand .logoImg{margin-right:2px}
 .scard b{display:block;font:600 16px/1.25 var(--serif);margin-bottom:4px;padding-right:18px;overflow-wrap:anywhere}.scard span{font-size:12px;color:var(--m)}
 .scard em{position:absolute;right:14px;bottom:12px;font-style:normal;color:var(--c)}
 @media(prefers-reduced-motion:reduce){.dwBody,.dwInner,.folder{transition:none}}
+
+/* Explicación de una respuesta (quiz, examen del profesor) */
+.fbExp{display:block;font-weight:400;color:var(--t);margin-top:6px;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--a) 10%,transparent);border-left:3px solid var(--a);font-size:.95em;line-height:1.4}
+
+/* Seguimiento del grupo (profesor) */
+.segCab{all:unset;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:space-between;align-items:center;width:100%;cursor:pointer}
+.segCab:focus-visible{outline:2px solid var(--a);outline-offset:4px;border-radius:6px}
+.segLista{margin-top:10px;display:grid;gap:6px}
+.segFila{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;border-left:3px solid var(--b);background:var(--card)}
+.segFila.riesgo{border-left-color:var(--no)}
+.segTop{margin:6px 0 0;padding-left:20px}
+.segTop li{margin:4px 0}
