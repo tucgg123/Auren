@@ -45,7 +45,7 @@ function viewSemestreHTML(sem,sems,todas){
     <nav class="crumbs" aria-label="Ruta"><button type="button" class="linkbtn" data-action="backMaterias">← Mis materias</button><span aria-hidden="true">/</span><span>${esc(sem.name)}</span></nav>
     <div class="viewhead"><div><h1>${esc(iconCarpeta(sem))} ${esc(sem.name)}</h1><p class="sub">${pluralMv(mats.length,'materia','materias')}</p></div><span class="semAvg" title="Promedio de la carpeta">${p==null?'':'⌀ '+fmtN(p)}</span></div>
     ${dwHTML(1,'Materias','Las materias de esta carpeta · '+mats.length,materias)}
-    ${dwHTML(2,'Mis apuntes por materia','Entra a una materia para escribir tus apuntes · '+pluralMv(nAp,'apunte','apuntes')+' en total',apuntes)}
+    ${dwHTML(2,'Mis apuntes por materia','Tus apuntes de los temas (pestaña «Mis apuntes» de cada tema) · '+pluralMv(nAp,'apunte','apuntes')+' en total',apuntes)}
   </div><aside class="mv-stats" aria-label="Resumen del estudiante">${matStatsHTML(sems.length,todas)}</aside></div>`;
 }
 function viewMateriasHTML(){
@@ -173,7 +173,6 @@ function viewMateriaDetailHTML(materiaId){
       </div>
     </section>
 
-    ${notasMateriaHTML(m)}
     <section class="${m.rol==='estudiante'?'docRO':''}">
       <div class="viewhead"><h2>📁 Cortes</h2><button class="pr" data-action="addCorte" data-mat="${materiaId}">+ Agregar corte</button></div>
       <div class="card notasBox" style="margin-bottom:14px;${m.rol==='docente'?'display:none':''}">

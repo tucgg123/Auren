@@ -147,19 +147,6 @@ document.addEventListener('click',async e=>{
   else if(a==='adminBorrar'){borrarCuentaAjena(b.dataset.uid)}
   else if(a==='notaEsquema'){const tm=miTema(b.dataset.id),ta=document.querySelector('textarea[data-tema="'+b.dataset.id+'"]');if(tm&&ta){const e=esquemaTexto(tm);if(e){ta.value=(ta.value.trim()?ta.value.replace(/\s+$/,'')+'\n\n':'')+e;programarNota(tm.id,tm.materiaId,ta.value)}}}
   else if(a==='ttsNota'){const tm=miTema(b.dataset.id);if(tm)ttsLeer('Mis apuntes: '+tm.title,textoNota(tm.id))}
-  else if(a==='notaGuardar'){guardarNotaMateria(b.dataset.mat)}
-  else if(a==='notaEditar'){
-    const n=notasMap[b.dataset.id];if(!n)return;
-    notaEditId=b.dataset.id;render(true);
-    const ti=$('apT-'+n.materiaId),tx=$('apX-'+n.materiaId);
-    if(ti)ti.value=n.titulo||'';
-    if(tx){tx.value=n.texto;tx.focus();if(tx.scrollIntoView)tx.scrollIntoView({block:'center'})}
-  }
-  else if(a==='notaCancelar'){
-    const n=notasMap[notaEditId];notaEditId=null;render(true);
-    if(n){const ti=$('apT-'+n.materiaId),tx=$('apX-'+n.materiaId);if(ti)ti.value='';if(tx)tx.value=''}
-  }
-  else if(a==='notaBorrar'){borrarNotaMateria(b.dataset.id)}
   else if(a==='pdfPick'){const pi=$('pdfCompInput');if(pi)pi.click()}
   else if(a==='ttsTema'){const tm=miTema(b.dataset.id);if(tm)ttsLeer(tm.title,textoTema(tm))}
   else if(a==='ttsSec'){const tm=miTema(b.dataset.tema),sc=tm&&(tm.secciones||[]).find(x=>x.id===b.dataset.sec);if(sc)ttsLeer(sc.title,textoSeccion(sc))}
