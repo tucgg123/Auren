@@ -49,6 +49,14 @@ service cloud.firestore {
     // Datos personales: solo la propia persona
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Cada materia del cuaderno en su propio documento (así no se pisan entre equipos ni chocan con el límite de 1 MB)
+      match /materias/{materiaId} {
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+          && request.resource.data.data is string;
+      }
     }
 
     // Materias compartidas entre compañeros (tipo 'compartida') y materias de docente (tipo 'docente')
@@ -346,6 +354,25 @@ service cloud.firestore {
         && request.resource.data.dia == hoyColChat()
         && ( ( resource.data.dia == hoyColChat() && request.resource.data.n == resource.data.n + 1 )
              || ( resource.data.dia != hoyColChat() && request.resource.data.n == 1 ) );
+      allow delete: if false;
+    }
+
+    // Límite por hora de peticiones a la IA (hora = milisegundos / 3 600 000). La función de Netlify lo lee y lo sube
+    // de 1 en 1 con el token de la propia persona; las reglas impiden bajarlo o borrarlo dentro de la misma hora.
+    match /iaHora/{u} {
+      function horaAhora() {
+        return math.floor(request.time.toMillis() / 3600000);
+      }
+      allow read: if request.auth != null && request.auth.uid == u;
+      allow create: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['h', 'n'])
+        && request.resource.data.h == horaAhora()
+        && request.resource.data.n == 1;
+      allow update: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['h', 'n'])
+        && request.resource.data.h == horaAhora()
+        && ( ( resource.data.h == horaAhora() && request.resource.data.n == resource.data.n + 1 )
+             || ( resource.data.h != horaAhora() && request.resource.data.n == 1 ) );
       allow delete: if false;
     }
 
