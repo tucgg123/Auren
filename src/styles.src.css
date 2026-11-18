@@ -887,9 +887,10 @@ h1.brand .logoImg{margin-right:2px}
 .favg{display:flex;align-items:baseline;gap:6px;margin-top:16px}.favg b{font:600 28px/1 var(--serif)}.favg span{font-size:11px;color:var(--m)}
 .fchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .fchip{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--al);color:var(--m);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.folder .fx{position:absolute;top:10px;right:10px;display:flex;gap:4px;opacity:0;transition:opacity .15s}
-.folder:hover .fx,.folder:focus-within .fx{opacity:1}
-@media(hover:none){.folder .fx{opacity:1}}
+.folder .fbtns{position:absolute;top:10px;right:10px;z-index:1;display:flex;gap:4px;opacity:0;transition:opacity .15s}
+.folder:not(.add) h3{padding-right:76px}
+.folder:hover .fbtns,.folder:focus-within .fbtns{opacity:1}
+@media(hover:none){.folder .fbtns{opacity:1}}
 .folder.add{border-style:dashed;background:transparent;display:grid;place-items:center;text-align:center;color:var(--m)}
 .folder.add::after{display:none}.folder.add .fplus{display:block;font-size:26px;margin-bottom:4px}
 .crumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--m);margin:0 0 10px}

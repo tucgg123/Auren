@@ -99,7 +99,7 @@ function dlgSiguiente(){
   const form=d.querySelector('form');
   form.onsubmit=e=>{e.preventDefault();cerrar(conCampos?Object.fromEntries(new FormData(form)):true)};
   const x=d.querySelector('[data-x]');if(x)x.onclick=()=>cerrar(cancelado);
-  d.onclose=()=>cerrar(op.sinCancelar?true:cancelado);                      // Esc
+  d.onclose=()=>{if(d.open)return;cerrar(op.sinCancelar?true:cancelado)};   // Esc (se ignora el 'close' atrasado del diálogo anterior cuando se abre uno seguido de otro)
   d.onclick=e=>{if(e.target===d)cerrar(op.sinCancelar?true:cancelado)};   // clic fuera
   if(typeof d.showModal==='function'){try{d.showModal()}catch(e){d.setAttribute('open','')}}else d.setAttribute('open','');
   const primero=d.querySelector('input,textarea,select')||d.querySelector('.pr');
@@ -1213,17 +1213,20 @@ function matColor(m){
 const SVG_A='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
 const IC_EDIT=SVG_A+'<path d="M4.5 19.5l.8-3.8L16.4 4.6a1.6 1.6 0 012.3 0l.7.7a1.6 1.6 0 010 2.3L8.3 18.7z"/></svg>';
 const IC_DEL=SVG_A+'<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>';
+const IC_MOVE=SVG_A+'<path d="M3 7.5V18a1.5 1.5 0 001.5 1.5h15A1.5 1.5 0 0021 18V9a1.5 1.5 0 00-1.5-1.5h-7.8L9.6 5H4.5A1.5 1.5 0 003 6.5z"/><path d="M10 13.5h6M13.5 11l2.5 2.5-2.5 2.5"/></svg>';
 const IC_ARR=SVG_A+'<path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 function pluralMv(n,a,b){return n+' '+(n==1?a:b)}
 
 /* ================= VISTA: MIS MATERIAS ================= */
-/* ---------- Inicio: carpetas de semestre → vista de semestre con cajones numerados ---------- */
+/* ---------- Inicio: carpetas (ej. un semestre) → vista de la carpeta con cajones numerados ----------
+   En los datos siguen llamándose state.semesters (cada uno con id, name e icon opcional) para no romper cuadernos ya guardados. */
+const iconCarpeta=sem=>sem.icon||'📁';
 function folderSemestreHTML(sem){
   const mats=state.materias.filter(m=>m.semesterId===sem.id&&m.rol!=='docente');
   const p=promSemestre(mats),nAp=mats.reduce((s,m)=>s+notasDeMateria(m.id).length,0);
   return `<div class="folder" role="button" tabindex="0" data-action="openSemester" data-id="${sem.id}" aria-label="Abrir ${esc(sem.name)}">
-    <span class="fx"><button type="button" class="icon-btn" data-action="renameSemester" data-id="${sem.id}" title="Renombrar semestre" aria-label="Renombrar semestre">${IC_EDIT}</button><button type="button" class="icon-btn del" data-action="delSemester" data-id="${sem.id}" title="Eliminar semestre" aria-label="Eliminar semestre">${IC_DEL}</button></span>
-    <h3>🎓 ${esc(sem.name)}</h3>
+    <span class="fbtns"><button type="button" class="icon-btn" data-action="renameSemester" data-id="${sem.id}" title="Editar carpeta" aria-label="Editar carpeta ${esc(sem.name)}">${IC_EDIT}</button><button type="button" class="icon-btn del" data-action="delSemester" data-id="${sem.id}" title="Eliminar carpeta" aria-label="Eliminar carpeta ${esc(sem.name)}">${IC_DEL}</button></span>
+    <h3>${esc(iconCarpeta(sem))} ${esc(sem.name)}</h3>
     <div class="meta">${pluralMv(mats.length,'materia','materias')}${nAp?' · '+pluralMv(nAp,'apunte','apuntes'):''}</div>
     <div class="favg"><b>${p==null?'–':fmtN(p)}</b><span>${p==null?'sin notas':'promedio'}</span></div>
     <div class="fchips">${mats.slice(0,3).map(m=>`<span class="fchip">${esc(m.name)}</span>`).join('')}${mats.length>3?`<span class="fchip">+${mats.length-3}</span>`:''}</div>
@@ -1240,14 +1243,14 @@ function dwHTML(n,titulo,sub,cuerpo){
 function viewSemestreHTML(sem,sems,todas){
   const mats=state.materias.filter(m=>m.semesterId===sem.id&&m.rol!=='docente');
   const p=promSemestre(mats),nAp=mats.reduce((s,m)=>s+notasDeMateria(m.id).length,0);
-  const materias=`<div class="grid">${mats.map(materiaCard).join('')||'<p class="meta">Sin materias en este semestre.</p>'}</div>
+  const materias=`<div class="grid">${mats.map(materiaCard).join('')||'<p class="meta">Esta carpeta está vacía. Usa el botón 📁 de una materia para moverla aquí.</p>'}</div>
     ${esProfesor()?`<div class="madd"><button class="sec" data-action="addMateria" data-sem="${sem.id}">+ Agregar materia</button><button class="sec" data-action="createShared" data-sem="${sem.id}">🤝 Materia compartida</button></div>`:''}`;
   const apuntes=mats.length?`<div class="sgrid">${mats.map(m=>{const n=notasDeMateria(m.id).length;return `<button type="button" class="scard" style="--c:${matColor(m)}" data-action="openMateria" data-id="${m.id}"><b>${esc(m.icon||'📘')} ${esc(m.name)}</b><span>${pluralMv(n,'apunte','apuntes')}</span><em aria-hidden="true">→</em></button>`}).join('')}</div>`
-    :'<div class="empty">Cuando tengas materias en este semestre, aquí verás sus apuntes.</div>';
+    :'<div class="empty">Cuando tengas materias en esta carpeta, aquí verás sus apuntes.</div>';
   return `<div class="mv"><div class="mv-col">
     <nav class="crumbs" aria-label="Ruta"><button type="button" class="linkbtn" data-action="backMaterias">← Mis materias</button><span aria-hidden="true">/</span><span>${esc(sem.name)}</span></nav>
-    <div class="viewhead"><div><h1>🎓 ${esc(sem.name)}</h1><p class="sub">${pluralMv(mats.length,'materia','materias')}</p></div><span class="semAvg" title="Promedio del semestre">${p==null?'':'⌀ '+fmtN(p)}</span></div>
-    ${dwHTML(1,'Materias','Las materias del semestre · '+mats.length,materias)}
+    <div class="viewhead"><div><h1>${esc(iconCarpeta(sem))} ${esc(sem.name)}</h1><p class="sub">${pluralMv(mats.length,'materia','materias')}</p></div><span class="semAvg" title="Promedio de la carpeta">${p==null?'':'⌀ '+fmtN(p)}</span></div>
+    ${dwHTML(1,'Materias','Las materias de esta carpeta · '+mats.length,materias)}
     ${dwHTML(2,'Mis apuntes por materia','Entra a una materia para escribir tus apuntes · '+pluralMv(nAp,'apunte','apuntes')+' en total',apuntes)}
   </div><aside class="mv-stats" aria-label="Resumen del estudiante">${matStatsHTML(sems.length,todas)}</aside></div>`;
 }
@@ -1257,15 +1260,15 @@ function viewMateriasHTML(){
   if(route.semId){
     const sem=sems.find(s=>s.id===route.semId);
     if(sem)return viewSemestreHTML(sem,sems,todas);
-    delete route.semId;                                    // el semestre ya no existe: se vuelve al inicio
+    delete route.semId;                                    // la carpeta ya no existe: se vuelve al inicio
   }
   return `<div class="mv"><div class="mv-col">
-    <div class="viewhead"><div><h1>Mis materias</h1><p class="sub">${pluralMv(sems.length,'semestre','semestres')} y ${pluralMv(todas.length,'materia','materias')}</p></div>
-      <span class="row" style="margin:0"><button class="sec" data-action="semDlg">📈 Promedio por semestre</button><button class="pr" data-action="addSemester">+ Semestre</button></span></div>
+    <div class="viewhead"><div><h1>Mis materias</h1><p class="sub">${pluralMv(sems.length,'carpeta','carpetas')} y ${pluralMv(todas.length,'materia','materias')}</p></div>
+      <span class="row" style="margin:0"><button class="sec" data-action="semDlg">📈 Promedio por carpeta</button><button class="pr" data-action="addSemester">+ Carpeta</button></span></div>
     ${invitacionesHTML()}
     ${repasoHoyHTML()}
-    ${sems.length?'':'<div class="empty">Aún no tienes semestres. Agrega uno para empezar a organizar tus materias.</div>'}
-    <div class="folders">${sems.map(folderSemestreHTML).join('')}<button type="button" class="folder add" data-action="addSemester"><span><span class="fplus" aria-hidden="true">＋</span>Nuevo semestre</span></button></div>
+    ${sems.length?'':'<div class="empty">Aún no tienes carpetas. Crea una (por ejemplo, «Primer semestre») para empezar a organizar tus materias.</div>'}
+    <div class="folders">${sems.map(folderSemestreHTML).join('')}<button type="button" class="folder add" data-action="addSemester"><span><span class="fplus" aria-hidden="true">＋</span>Nueva carpeta</span></button></div>
   </div><aside class="mv-stats" aria-label="Resumen del estudiante">${matStatsHTML(sems.length,todas)}</aside></div>`;
 }
 function materiaCard(m){
@@ -1283,6 +1286,7 @@ function materiaCard(m){
     <div class="macts">
       <button class="mopen" data-action="openMateria" data-id="${m.id}" aria-label="Abrir ${esc(m.name)}"><span class="lb">Abrir</span>${IC_ARR}</button>
       <span class="mpair">
+        ${m.rol!=='docente'?`<button class="icon-btn" data-action="moverMateria" data-id="${m.id}" title="Mover a otra carpeta" aria-label="Mover ${esc(m.name)} a otra carpeta">${IC_MOVE}</button><i></i>`:''}
         <button class="icon-btn" data-action="renameMateria" data-id="${m.id}" title="Editar materia" aria-label="Editar ${esc(m.name)}">${IC_EDIT}</button><i></i>
         <button class="icon-btn del" data-action="delMateria" data-id="${m.id}" title="Eliminar materia" aria-label="Eliminar ${esc(m.name)}">${IC_DEL}</button>
       </span>
@@ -1296,14 +1300,14 @@ const semsVisibles=()=>state.semesters.filter(x=>!x.oculto).map(s=>({s,mats:stat
 function filasSemHTML(mats){
   const mx=scaleMax()||5;
   const rows=mats.map(m=>({m,a:promMateria(m)})).filter(x=>x.a!=null).sort((x,y)=>y.a-x.a);
-  if(!rows.length)return '<p class="dm">Aún sin notas en este semestre.</p>';
+  if(!rows.length)return '<p class="dm">Aún sin notas en esta carpeta.</p>';
   return `<div class="stRows">${rows.map(x=>`<div class="stRow" style="--mc:${matColor(x.m)}"><span>${esc(x.m.name)}</span><b>${fmtN(x.a)}</b><div class="mbar"><i style="width:${Math.max(0,Math.min(100,x.a/mx*100))}%"></i></div></div>`).join('')}</div>`;
 }
 function semestresDialogoHTML(){
-  const bl=semsVisibles().map(({s,mats})=>{const p=promSemestre(mats);return `<div class="sdl"><div class="sdh"><span>${esc(s.name)}</span><b>${p==null?'–':fmtN(p)}</b></div>${filasSemHTML(mats)}</div>`}).join('');
-  return `<div class="sdlWrap">${bl||'<p class="dm">Aún no hay semestres.</p>'}</div>`;
+  const bl=semsVisibles().map(({s,mats})=>{const p=promSemestre(mats);return `<div class="sdl"><div class="sdh"><span>${esc(iconCarpeta(s))} ${esc(s.name)}</span><b>${p==null?'–':fmtN(p)}</b></div>${filasSemHTML(mats)}</div>`}).join('');
+  return `<div class="sdlWrap">${bl||'<p class="dm">Aún no hay carpetas.</p>'}</div>`;
 }
-function abrirPromediosSemestre(){dialogo({titulo:'Promedio por semestre',html:semestresDialogoHTML(),ok:'Cerrar',sinCancelar:true})}
+function abrirPromediosSemestre(){dialogo({titulo:'Promedio por carpeta',html:semestresDialogoHTML(),ok:'Cerrar',sinCancelar:true})}
 function miniCalHTML(){
   const ahora=new Date(),off=ui.calM||0,base=new Date(ahora.getFullYear(),ahora.getMonth()+off,1);
   const y=base.getFullYear(),mo=base.getMonth(),pad=n=>String(n).padStart(2,'0');
@@ -1334,7 +1338,7 @@ function matStatsHTML(nSem,mats){
       <div class="stHl">${resaltes}</div></section>
     <details class="drawer cal" open><summary class="dh"><span>📅 Calendario</span><span class="da">${MESES[new Date(new Date().getFullYear(),new Date().getMonth()+(ui.calM||0),1).getMonth()].slice(0,3)}<span class="chev">▾</span></span></summary>${miniCalHTML()}</details>
     <section class="stPn"><div class="stK">Mi carrera</div><div class="stKp">
-      <div><b>${nSem}</b><span>${nSem==1?'semestre':'semestres'}</span></div><div><b>${mats.length}</b><span>${mats.length==1?'materia':'materias'}</span></div>
+      <div><b>${nSem}</b><span>${nSem==1?'carpeta':'carpetas'}</span></div><div><b>${mats.length}</b><span>${mats.length==1?'materia':'materias'}</span></div>
       <div><b>${temas}</b><span>${temas==1?'tema':'temas'}</span></div><div><b>${nTarj}</b><span>${nTarj==1?'tarjeta':'tarjetas'}</span></div></div></section>`;
 }
 
@@ -2296,21 +2300,25 @@ document.addEventListener('click',async e=>{
   const a=b.dataset.action;
 
   if(a==='addSemester'){
-    const name=await UI.prompt('Nombre del semestre (ej. Semestre 1, 2026-1):');
-    if(name&&name.trim())mutate(s=>s.semesters.push({id:uid(),name:name.trim()}));
+    const f=await formCarpeta('Nueva carpeta');
+    if(f)mutate(s=>s.semesters.push({id:uid(),name:f.name,icon:f.icon}));
   }
   else if(a==='renameSemester'){
     const cur=state.semesters.find(x=>x.id===b.dataset.id);
-    const name=await UI.prompt('Nuevo nombre del semestre:',cur?cur.name:'');
-    if(name&&name.trim())mutate(s=>{const x=s.semesters.find(y=>y.id===b.dataset.id);if(x)x.name=name.trim()});
+    const f=await formCarpeta('Editar carpeta',cur);
+    if(f)mutate(s=>{const x=s.semesters.find(y=>y.id===b.dataset.id);if(x){x.name=f.name;x.icon=f.icon}});
   }
+  else if(a==='moverMateria'){moverMateria(b.dataset.id)}
   else if(a==='renameMateria'){
     const cur=state.materias.find(x=>x.id===b.dataset.id);
     const f=await formMateria('Editar materia',cur,undefined,!!(cur&&cur.rol==='docente'));
     if(f)mutate(s=>{const x=s.materias.find(y=>y.id===b.dataset.id);if(x){x.name=f.name;x.icon=f.icon;if(f.color)x.color=f.color;if(f.semestre){x.semestre=f.semestre;x.curso=f.curso}}});
   }
   else if(a==='delSemester'){
-    if(await UI.confirmar('¿Eliminar este semestre y todas sus materias, temas y cortes? Esta acción no se puede deshacer.')){
+    const dest=await destinoAlBorrarCarpeta(b.dataset.id);
+    if(dest===null)return;
+    if(dest){mutate(s=>{s.materias.forEach(m=>{if(m.semesterId===b.dataset.id)m.semesterId=dest});s.semesters=s.semesters.filter(x=>x.id!==b.dataset.id)});return}
+    {
       state.materias.filter(m=>m.semesterId===b.dataset.id&&m.sharedId).forEach(m=>abandonarCompartida(m,{silent:true}));
       mutate(s=>{
         const matIds=s.materias.filter(m=>m.semesterId===b.dataset.id).map(m=>m.id);
@@ -3239,6 +3247,52 @@ function desvincularCompartida(sid,aviso){
 
 /* ---------- Crear, compartir, unirse, salir ---------- */
 /* Formulario único para crear o editar una materia: nombre, emoji y color */
+/* ---------- Carpetas del estudiante: crear, editar, mover materias y borrar sin perder nada ---------- */
+async function formCarpeta(titulo,cur){
+  const r=await UI.preguntar(titulo,[
+    {k:'n',l:'Nombre',v:cur?cur.name:'',ph:'Ej. Primer semestre, 2026-1, Electivas',max:60},
+    {k:'i',l:'Emoji (opcional)',v:cur?iconCarpeta(cur):'📁',max:4}
+  ],{ok:'Guardar'});
+  if(!r||!String(r.n).trim())return null;
+  return {name:String(r.n).trim().slice(0,60),icon:String(r.i||'').trim()||'📁'};
+}
+async function moverMateria(materiaId){
+  const m=state.materias.find(x=>x.id===materiaId);
+  if(!m||m.rol==='docente')return;
+  const sems=state.semesters.filter(x=>!x.oculto);
+  const NUEVA='__nueva__';
+  const r=await UI.preguntar('Mover «'+m.name+'»',[
+    {k:'d',l:'Carpeta de destino',t:'select',v:m.semesterId,o:sems.map(x=>[x.id,iconCarpeta(x)+' '+x.name]).concat([[NUEVA,'＋ Nueva carpeta…']])}
+  ],{ok:'Mover'});
+  if(!r)return;
+  let destino=r.d;
+  if(destino===NUEVA){
+    const f=await formCarpeta('Nueva carpeta');
+    if(!f)return;
+    destino=uid();
+    const nueva={id:destino,name:f.name,icon:f.icon};
+    mutate(s=>{s.semesters.push(nueva);const x=s.materias.find(y=>y.id===materiaId);if(x)x.semesterId=destino});
+    return;
+  }
+  if(destino===m.semesterId||!sems.some(x=>x.id===destino))return;
+  mutate(s=>{const x=s.materias.find(y=>y.id===materiaId);if(x)x.semesterId=destino});
+}
+/* Devuelve: null = cancelar · '' = borrar la carpeta con todo su contenido · id = mover sus materias a esa carpeta */
+async function destinoAlBorrarCarpeta(semId){
+  const sem=state.semesters.find(x=>x.id===semId);if(!sem)return null;
+  const n=state.materias.filter(m=>m.semesterId===semId).length;
+  const otras=state.semesters.filter(x=>!x.oculto&&x.id!==semId);
+  if(!n)return (await UI.confirmar('¿Eliminar la carpeta «'+sem.name+'»? Está vacía.'))?'':null;
+  if(!otras.length)return (await UI.confirmar('¿Eliminar la carpeta «'+sem.name+'» y '+(n===1?'su materia':'sus '+n+' materias')+' (con temas, cortes y tarjetas)? Esta acción no se puede deshacer.'))?'':null;
+  const BORRAR='__borrar__',una=n===1,sus=una?'su materia':'sus '+n+' materias';
+  const r=await UI.preguntar('Eliminar «'+sem.name+'»',[
+    {k:'d',l:'¿Qué hacemos con '+sus+'?',t:'select',v:otras[0].id,
+      o:otras.map(x=>[x.id,(una?'Moverla':'Moverlas')+' a '+iconCarpeta(x)+' '+x.name]).concat([[BORRAR,(una?'Eliminarla':'Eliminarlas')+' también (no se puede deshacer)']])}
+  ],{ok:'Eliminar carpeta',peligro:true});
+  if(!r)return null;
+  if(r.d!==BORRAR)return otras.some(x=>x.id===r.d)?r.d:null;
+  return (await UI.confirmar('¿Eliminar también '+sus+' con temas, cortes y tarjetas? Esta acción no se puede deshacer.'))?'':null;
+}
 async function formMateria(titulo,cur,ph,docente){
   const campos=[
     {k:'n',l:'Nombre',v:cur?cur.name:'',ph:ph||'',max:80},
