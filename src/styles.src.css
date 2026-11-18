@@ -952,3 +952,7 @@ h1.brand .logoImg{margin-right:2px}
 .segFila.riesgo{border-left-color:var(--no)}
 .segTop{margin:6px 0 0;padding-left:20px}
 .segTop li{margin:4px 0}
+
+/* Celulares y efectos reducidos: sin desenfoque (backdrop-filter) la barra superior semitransparente dejaba ver
+   el contenido de abajo encima del logo y del buscador. Ahí la barra va con fondo sólido. */
+html[data-fx="lite"] header#topbar,html[data-fx="off"] header#topbar{background:var(--bg)}
