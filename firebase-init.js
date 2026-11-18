@@ -19,12 +19,12 @@ if (/PEGA_AQUI/.test(FIREBASE_CONFIG.apiKey)) {
     var d = document.createElement('div');
     d.setAttribute('role', 'alert');
     d.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:99999;background:#fff3cd;color:#222;border:1px solid #d6a800;border-radius:10px;padding:12px 14px;font:14px/1.4 system-ui,sans-serif';
-    d.textContent = 'Falta configurar Firebase: abre firebase-init.js y pega las llaves de tu proyecto nuevo (ver LEEME-V2.md). Hasta entonces no se puede iniciar sesión.';
+    d.textContent = 'Falta configurar Firebase: abre firebase-init.js y pega las llaves de tu proyecto nuevo (ver readme.md). Hasta entonces no se puede iniciar sesión.';
     document.body.appendChild(d);
   });
 }
 /* Archivos originales de más de 8 MB: si activas Firebase Storage (exige el plan Blaze) pon esto en true.
-   Ver LEEME.md → "Activar Firebase Storage". Mientras sea false, el límite sigue siendo 8 MB y todo funciona como antes. */
+   Para activarlo: en Firebase → Storage crea el bucket y publica storage.rules (está en el repositorio). Mientras sea false, el límite sigue siendo 8 MB y todo funciona como antes. */
 var USAR_STORAGE = false;
 
 firebase.initializeApp(FIREBASE_CONFIG);

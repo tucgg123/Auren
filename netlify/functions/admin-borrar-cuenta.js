@@ -88,7 +88,7 @@ exports.handler = async event => {
   let cuenta;
   try { cuenta = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || ''); } catch (e) { cuenta = null; }
   if (!cuenta || !cuenta.client_email || !cuenta.private_key) {
-    return json(501, { error: 'Falta configurar FIREBASE_SERVICE_ACCOUNT en Netlify (el JSON de la cuenta de servicio). Ver LEEME-V2.md.' });
+    return json(501, { error: 'Falta configurar FIREBASE_SERVICE_ACCOUNT en Netlify (el JSON de la cuenta de servicio). Ver readme.md.' });
   }
   try {
     const tok = await tokenDeServicio(cuenta);
