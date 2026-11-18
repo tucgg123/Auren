@@ -194,22 +194,18 @@ function viewPerfilDocenteHTML(){
       <div class="pfhero"><div class="pfav">${esc(p.avatar)}</div><div><h2 style="margin:0">${esc(p.name)||'Profesor'}</h2><p class="meta" style="margin:2px 0 0">${esc(p.career)||'Agrega tu institución'}</p></div></div>
       <div class="pgs"><div><b>${mats.length}</b>materias</div><div><b>${nEx}</b>exámenes</div></div>
     </div>
-    <div class="card"><h3>Avatar</h3><div class="avatarPicker">${AV.map(a=>`<button class="avBtn ${a===p.avatar?'on':''}" data-action="setAvatar" data-a="${a}">${a}</button>`).join('')}</div></div>
-    ${fxCardHTML()}
-    ${datosCardHTML()}
-    <div class="card">
-      <h3>Editar perfil</h3>
-      <label class="lbl">Nombre (lo verán tus estudiantes)</label><input class="fld" data-action="profileField" data-f="name" value="${esc(p.name)}" maxlength="40">
+    ${dwHTML('pf:av','Avatar','Elige el emoji que te representa',`<div class="avatarPicker">${AV.map(a=>`<button class="avBtn ${a===p.avatar?'on':''}" data-action="setAvatar" data-a="${a}">${a}</button>`).join('')}</div>`,esc(p.avatar))}
+    ${dwHTML('pf:ed','Editar perfil','Nombre, institución y escala de notas',`
+      <label class="lbl" style="margin-top:0">Nombre (lo verán tus estudiantes)</label><input class="fld" data-action="profileField" data-f="name" value="${esc(p.name)}" maxlength="40">
       <label class="lbl">Institución</label><input class="fld" data-action="profileField" data-f="career" value="${esc(p.career)}" maxlength="80">
       <label class="lbl">Escala de notas de tus exámenes</label><select class="fld" data-action="setScale" style="max-width:220px">${[5,10,100].map(n=>`<option value="${n}" ${scaleMax()===n?'selected':''}>0 a ${n}</option>`).join('')}</select>
-      <p class="meta" style="margin:6px 0 0">Se aplica a los exámenes nuevos. Los ya creados conservan su escala.</p>
-    </div>
-    ${rolCardHTML()}
-    <div class="card">
-      <h3>Cuenta</h3>
-      <p class="meta">Conectado como <b>${esc(auth.currentUser&&auth.currentUser.email||'')}</b></p>
-      <button class="sec" data-action="logout">🚪 Cerrar sesión</button> <button class="sec" data-action="borrarCuenta" style="color:var(--no)">🗑️ Eliminar mi cuenta</button>
-    </div>`;
+      <p class="meta" style="margin:6px 0 0">Se aplica a los exámenes nuevos. Los ya creados conservan su escala.</p>`,'✏️')}
+    ${dwHTML('pf:fx','Efectos visuales','Fondo animado y ahorro de batería',fxCardHTML(),'✨')}
+    ${dwHTML('pf:datos','Tus datos','Descarga una copia de respaldo',datosCardHTML(),'💾')}
+    ${dwHTML('pf:rol','Tu rol',esc(nombreRol(p.rol||'estudiante')),rolCardHTML(),'🎓')}
+    ${dwHTML('pf:cuenta','Cuenta',esc(auth.currentUser&&auth.currentUser.email||''),`
+      <p class="meta" style="margin-top:0">Conectado como <b>${esc(auth.currentUser&&auth.currentUser.email||'')}</b></p>
+      <button class="sec" data-action="logout">🚪 Cerrar sesión</button> <button class="sec" data-action="borrarCuenta" style="color:var(--no)">🗑️ Eliminar mi cuenta</button>`,'🔑')}`;
 }
 
 /* ======================= Acciones ======================= */

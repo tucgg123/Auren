@@ -59,7 +59,8 @@ function animarVista(){
   if(enTool&&toolState.fxFin){
     toolState.fxFin=false;
     const qs=toolState.questions;
-    if(qs&&toolState.idx>=qs.length&&toolState.score/qs.length>=0.7)lluvia();
+    const p=qs?(toolState.idx>=qs.length&&qs.length?toolState.score/qs.length:0):(toolState.fxPct||0);
+    if(p>=0.7)lluvia();
   }
 }
 

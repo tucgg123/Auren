@@ -23,6 +23,65 @@ function alcanceHTML(materiaId){
     <p class="meta" style="margin:0 0 10px">Se aplica a flashcards, memorizar, repaso y comparar. El Quiz y el Modo examen se arman por corte (y tema) en su propia pantalla.</p>`;
 }
 
+/* ---------- Estudiar: actividades agrupadas como juegos, con un reto del día ---------- */
+const ACTIVIDADES=[
+  {g:'aprende',t:'flashcards',ico:'🔄',n:'Flashcards',d:'Voltea la tarjeta y di si te la sabías'},
+  {g:'aprende',t:'memorizar',ico:'🙈',n:'Memorizar',d:'Tapa la respuesta, recuérdala y destápala'},
+  {g:'aprende',t:'concepto',ico:'💡',n:'¿Qué concepto?',d:'Lee la pista y adivina el término'},
+  {g:'juega',t:'emparejar',ico:'🧩',n:'Emparejar',d:'Une cada término con su definición'},
+  {g:'juega',t:'repaso',ico:'⏱️',n:'Contrarreloj',d:'¿Cuántas sabes en 5 minutos?'},
+  {g:'juega',t:'quiz',ico:'❓',n:'Quiz',d:'Preguntas con combos y confeti'},
+  {g:'prueba',t:'examen',ico:'📝',n:'Modo examen',d:'Como el de verdad: la nota al final'},
+  {g:'prueba',t:'escrito',ico:'✍️',n:'Examen escrito',d:'Responde con tus palabras y compara'},
+  {g:'repasa',t:'hoy',ico:'📅',n:'Repaso de hoy',d:'Las que te tocan hoy para no olvidarlas'},
+  {g:'repasa',t:'falle',ico:'🎯',n:'Lo que fallé',d:'Vuelve a las que se te resistieron'},
+  {g:'organiza',t:'progreso',ico:'📊',n:'Mi progreso',d:'Tarjetas dominadas e historial'},
+  {g:'organiza',t:'comparar',ico:'⚖️',n:'Comparar',d:'Dos materias lado a lado'},
+  {g:'organiza',t:'referencias',ico:'📚',n:'Referencias',d:'Tu bibliografía de la materia'}
+];
+const GRUPOS_ACT=[['aprende','🌱 Aprende','#8ED1A4'],['juega','🎮 Juega','#A99BE8'],['prueba','🏁 Ponte a prueba','#E8C27A'],['repasa','🔁 Repasa','#7FB3E6'],['organiza','🗂️ Organiza','#E9A58C']];
+const nombreAct=t=>(ACTIVIDADES.find(x=>x.t===t)||{}).n||'';
+function rachaHoyN(){const dh=progresoHoy();return state.progress.days.includes(fechaLocal(new Date()))?Math.max(dh.racha,META_RACHA):dh.racha}
+/* Sugiere UNA actividad según lo que le conviene hoy a la persona */
+function retoHoy(materiaId){
+  const nC=getCardsTodas(materiaId).length,nH=sesionHoy(materiaId).length,nF=tarjetasFalladas(materiaId).length,hoyN=rachaHoyN();
+  if(!nC)return{t:'',txt:'Agrega tarjetas en tus temas (pestaña «Tarjetas») y aquí aparecerán tus retos.'};
+  if(nH)return{t:'hoy',txt:'Tienes '+pluralMv(nH,'tarjeta','tarjetas')+' para repasar hoy. ¡No dejes que se te olviden!'};
+  if(nF)return{t:'falle',txt:'Hay '+pluralMv(nF,'tarjeta que se te resistió','tarjetas que se te resistieron')+'. ¡Es tu revancha!'};
+  if(hoyN<META_RACHA)return{t:'quiz',txt:'Responde '+(META_RACHA-hoyN)+' preguntas más en un quiz para asegurar tu racha 🔥.'};
+  return{t:'emparejar',txt:'¡Racha de hoy asegurada! Juega a emparejar para afianzar lo aprendido.'};
+}
+function estudiarCajonHTML(m){
+  const id=m.id,nC=getCardsTodas(id).length,nH=sesionHoy(id).length,nF=tarjetasFalladas(id).length;
+  const hoyN=rachaHoyN(),reto=retoHoy(id),nv=nivelDe();
+  const cuenta={hoy:nH,falle:nF};
+  const retoHTML=`<div class="reto">
+      <div class="retoTop"><span class="retoK">⭐ Reto de hoy</span><span class="chip">Nivel ${nv.nivel} · ${esc(nv.nombre)}</span></div>
+      <p class="retoTxt">${esc(reto.txt)}</p>
+      <div class="retoRacha"><span>🔥 Racha de hoy</span><b>${Math.min(hoyN,META_RACHA)}/${META_RACHA}</b></div>
+      <div class="bar"><i style="width:${Math.min(100,Math.round(hoyN/META_RACHA*100))}%"></i></div>
+      ${reto.t?`<button class="pr retoBtn" data-action="openTool" data-tool="${reto.t}" data-mat="${id}">¡Vamos! ${esc(nombreAct(reto.t))} →</button>`:''}
+    </div>`;
+  const grupos=GRUPOS_ACT.map(([g,tit,col])=>`<div class="actGrupo"><h3 class="actGT">${tit}</h3><div class="actGrid">${ACTIVIDADES.filter(a=>a.g===g).map(a=>`<button type="button" class="act" style="--ac:${col}" data-action="openTool" data-tool="${a.t}" data-mat="${id}"><span class="actIco" aria-hidden="true">${a.ico}</span><b>${a.n}</b><small>${a.d}</small>${cuenta[a.t]?`<em class="actN" aria-label="${cuenta[a.t]} pendientes">${cuenta[a.t]}</em>`:''}</button>`).join('')}</div></div>`).join('');
+  const cuerpo=`${retoHTML}${alcanceHTML(id)}${grupos}`;
+  return `<div class="estudiarDw">${dwHTML('m:'+id+':est','Estudiar',pluralMv(nC,'tarjeta','tarjetas')+' · '+ACTIVIDADES.length+' actividades'+(nH?' · '+nH+' para hoy':''),cuerpo,'🎯',nH||'')}</div>`;
+}
+/* Estrellas y pantalla final comunes a los juegos */
+const estrellasDe=p=>p>=0.9?3:p>=0.7?2:p>=0.4?1:0;
+function estrellasHTML(n){return `<div class="stars" role="img" aria-label="${n} de 3 estrellas">${[0,1,2].map(i=>`<span class="${i<n?'on':''}" style="--i:${i}">★</span>`).join('')}</div>`}
+function finJuegoHTML(o){
+  const p=o.total?o.ok/o.total:0,tono=p>=0.7?'alto':p>=0.4?'medio':'bajo',n=o.estrellas!=null?o.estrellas:estrellasDe(p);
+  const msg=o.msg||(n===3?'¡Perfecto! 🤩':n===2?'¡Excelente trabajo! 🎉':n===1?'Vas bien, un intento más y lo logras 💪':'Cada intento cuenta. ¡Vuelve a probar! 🌱');
+  return `<div class="empty resultado"><h2>${o.titulo}</h2>
+    <div class="ringWrap ${tono}"><svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="rbg" cx="60" cy="60" r="52"/><circle class="rfg" cx="60" cy="60" r="52" style="--p:${Math.round(p*100)}"/></svg>
+      <div class="ringTxt"><b class="countUp" data-to="${o.ok}">${o.ok}</b><span>/ ${o.total}</span></div></div>
+    ${estrellasHTML(n)}<p class="resMsg">${msg}</p>${o.linea?`<p class="meta">${o.linea}</p>`:''}${o.extra||''}
+    <div class="row finBtns"><button class="pr" data-action="redoTool">${o.redo||'Jugar otra vez'}</button><button class="sec" data-action="backMateria" data-id="${route.materiaId}">Elegir otra actividad</button></div></div>`;
+}
+/* Récords por materia (solo en este dispositivo) */
+function leerRecord(k){try{return +localStorage.getItem('auren_rec_'+k)||0}catch(e){return 0}}
+function guardarRecord(k,v){try{localStorage.setItem('auren_rec_'+k,String(v))}catch(e){}}
+
 function fmtSecs(s){s=Math.max(0,s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
 function relTime(ts){
   const d=Math.round((Date.now()-ts)/864e5);
@@ -187,7 +246,7 @@ let repasoHoyMem=null;
 function repasoHoyAbierto(){
   if(repasoHoyMem!==null)return repasoHoyMem;
   try{const v=localStorage.getItem(REPASO_HOY_KEY);if(v==='0')return false;if(v==='1')return true}catch(e){}
-  return true;                                           // por defecto, abierto
+  return false;                                          // por defecto, cerrado (se abre al tocarlo)
 }
 function guardarRepasoHoyAbierto(abierto){
   repasoHoyMem=abierto;
@@ -248,7 +307,7 @@ function escritoHTML(){
   const{questions,idx,score}=toolState;
   if(idx>=questions.length){
     const pct=questions.length?Math.round(score/questions.length*100):0;
-    return `<div class="empty"><h2>✍️ Examen escrito terminado</h2><p class="meta">Te calificaste <b>${score} / ${questions.length}</b> · ${pct}%</p>${premiosHTML()}
+    return `<div class="empty"><h2>✍️ Examen escrito terminado</h2><p class="meta">Te calificaste <b>${score} / ${questions.length}</b> · ${pct}%</p>${estrellasHTML(estrellasDe(score/questions.length))}${premiosHTML()}
       <div class="resList">${questions.map((q,i)=>`<p class="meta resRow ${q.ok?'bien':'mal'}" style="--i:${Math.min(i,14)}">${i+1}. ${esc(q.enun)} — ${q.ok?'✅':'❌'}</p>`).join('')}</div>
       <button class="pr" data-action="redoTool">Repetir</button></div>`;
   }
@@ -277,8 +336,13 @@ function comenzarFalle(modo,temaId){
 function startTool(tool,materiaId){
   clearRepasoTimer();
   const cards=getCards(materiaId);
-  if(tool==='flashcards'||tool==='memorizar'||tool==='repaso'||tool==='concepto'){
-    toolState={cards:shuffle(cards),idx:0,flipped:false,known:0,seen:0};
+  ui.dw=ui.dw||{};ui.dw['m:'+materiaId+':est']=true;          // al volver a la materia, el cajón Estudiar sigue abierto
+  if(tool==='flashcards'||tool==='memorizar'||tool==='repaso'){
+    toolState={cards:shuffle(cards),idx:0,flipped:false,known:0,seen:0,combo:0,mejor:0};
+  }else if(tool==='concepto'){
+    toolState=armarConcepto(cards);
+  }else if(tool==='emparejar'){
+    toolState=armarEmparejar(cards);
   }else if(tool==='quiz'||tool==='examen'||tool==='escrito'){
     /* El examen se arma con UN corte elegido (ver comenzarQuiz): nunca mezcla cortes ni materias */
     const cfg=quizCfgDe(materiaId,tool);
@@ -296,14 +360,24 @@ function startTool(tool,materiaId){
   route={view:'tool',tool,materiaId};
   render();
   if(tool==='falle')cargarFallosExamenes(materiaId);
-  if(tool==='repaso'){
-    toolState.secondsLeft=300;
+  if(tool==='repaso'&&cards.length){
+    toolState.secondsLeft=REPASO_SEG;
     repasoTimer=setInterval(()=>{
       toolState.secondsLeft--;
       const el=$('repasoTimerText');
       if(el)el.textContent=fmtSecs(toolState.secondsLeft);
-      if(toolState.secondsLeft<=0){clearRepasoTimer();render();}
+      const br=$('repasoBar');if(br)br.style.width=(toolState.secondsLeft/REPASO_SEG*100)+'%';
+      if(toolState.secondsLeft<=0){
+        clearRepasoTimer();
+        const k='repaso_'+materiaId,rec=leerRecord(k);
+        toolState.recordAntes=rec;if(toolState.known>rec)guardarRecord(k,toolState.known);
+        toolState.fxFin=true;toolState.fxPct=toolState.known>rec&&toolState.known>0?1:0;
+        render();
+      }
     },1000);
+  }
+  if(tool==='emparejar'&&toolState.pares&&toolState.pares.length){
+    repasoTimer=setInterval(()=>{const el=$('empTime');if(el&&!toolState.fin)el.textContent=fmtSecs(Math.floor((Date.now()-toolState.t0)/1000))},1000);
   }
 }
 
@@ -321,6 +395,7 @@ function viewToolHTML(){
   else if(tool==='examen')body=toolQuizHTML(true);
   else if(tool==='escrito')body=toolState.setup?quizSetupHTML(false,true):escritoHTML();
   else if(tool==='concepto')body=toolConceptoHTML();
+  else if(tool==='emparejar')body=toolEmparejarHTML();
   else if(tool==='repaso')body=toolRepasoHTML();
   else if(tool==='comparar')body=toolCompararHTML(m);
   else if(tool==='progreso')body=toolProgresoHTML(m);
@@ -328,20 +403,27 @@ function viewToolHTML(){
   return head+body;
 }
 
+/* Barra de avance y marcador de los juegos de tarjetas */
+function marcadorHTML(idx,total,ok,combo){
+  return `<div class="bar qbar"><i style="width:${Math.round(idx/total*100)}%"></i></div>
+  <div class="marcador"><span class="chip">✅ ${ok} ${ok==1?'acierto':'aciertos'}</span>${combo>=2?`<span class="comboChip">🔥 ${combo} seguidas</span>`:''}</div>`;
+}
 function toolFlashcardsHTML(titulo){
   const esHoy=route.tool==='hoy';
   const{cards,idx,flipped,known,seen}=toolState;
   if(!cards.length)return esHoy?hoyVacioHTML():noCardsMsg();
-  if(idx>=cards.length)return `<div class="empty"><h2>🎉 ¡Terminaste!</h2><p>Sabías ${known} de ${seen} tarjetas.</p>${esHoy?`<p class="meta">${esc(proximoRepasoTexto(route.materiaId))}</p>`:''}<button class="pr" data-action="redoTool">${esHoy?'Ver si queda algo por hoy':'Repetir'}</button></div>`;
+  if(idx>=cards.length)return finJuegoHTML({titulo:esHoy?'📅 ¡Repaso de hoy listo!':'🔄 ¡Terminaste!',ok:known,total:seen,
+    linea:'Te sabías '+known+' de '+pluralMv(seen,'tarjeta','tarjetas')+(toolState.mejor>=3?' · mejor racha: '+toolState.mejor+' seguidas 🔥':'')+'.',
+    extra:esHoy?`<p class="meta">${esc(proximoRepasoTexto(route.materiaId))}</p>`:'',redo:esHoy?'Ver si queda algo por hoy':'Jugar otra vez'});
   const c=cards[idx];
   return `
   <div class="viewhead"><h1>${titulo||'🔄 Flashcards'}</h1><span class="meta">${idx+1} / ${cards.length}</span></div>
-  <div class="row" style="justify-content:flex-end;margin:-4px 0 8px">${ttsBtn('ttsCard','data-id="'+cards[idx].id+'"')}</div>
-  ${esHoy?`<div class="chips" style="margin:-4px 0 8px"><span class="chip">${c.box?'Caja '+c.box+' de 5':'Nueva'}</span></div>`:''}
+  ${marcadorHTML(idx,cards.length,known,toolState.combo||0)}
+  <div class="row" style="justify-content:space-between;margin:0 0 8px">${esHoy?`<span class="chip">${c.box?'Caja '+c.box+' de 5':'Nueva'}</span>`:'<span></span>'}${ttsBtn('ttsCard','data-id="'+cards[idx].id+'"')}</div>
   <div class="flashcard ${flipped?'flip':''}" data-action="flipCard" role="button" tabindex="0" aria-pressed="${flipped}" aria-label="${flipped?'Respuesta':'Pregunta'}: ${esc(flipped?c.back:c.front)}. Pulsa Enter para voltear.">
-    <div class="fcInner" aria-hidden="true"><div class="fcFace fcFront">${esc(c.front)}</div><div class="fcFace fcBack">${esc(c.back)}</div></div>
+    <div class="fcInner" aria-hidden="true"><div class="fcFace fcFront"><span class="fcTag">Pregunta</span>${esc(c.front)}</div><div class="fcFace fcBack"><span class="fcTag">Respuesta</span>${esc(c.back)}</div></div>
   </div>
-  <p class="meta" style="text-align:center">Tocá la tarjeta para voltear</p>
+  <p class="meta" style="text-align:center">👆 Primero intenta recordarla, luego toca la tarjeta para voltearla</p>
   <div class="row fcResp" style="justify-content:center;flex-wrap:wrap" role="group" aria-label="¿Qué tan bien te la sabías?">
     <button class="sec" data-action="cardAnswer" data-know="0" title="Vuelve mañana">😕 No la sé</button>
     <button class="sec" data-action="cardAnswer" data-know="1" data-cal="dificil" title="Acertaste, pero vuelve pronto">🤔 Me costó</button>
@@ -350,40 +432,149 @@ function toolFlashcardsHTML(titulo){
   </div>`;
 }
 
+/* Memorizar: la respuesta está tapada. La persona intenta recordarla, la destapa y dice si la recordó. */
 function toolMemorizarHTML(m){
-  const cards=getCards(m.id);
+  const cards=toolState.cards||[];
   if(!cards.length)return noCardsMsg();
-  return `<div class="viewhead"><h1>📖 Memorizar</h1></div>
-  <p class="meta">Repasá todas las tarjetas de un vistazo, sin apuros.</p>
-  ${cards.map(c=>`<div class="card"><b>${esc(c.front)}</b><p class="meta" style="margin:6px 0 0">${esc(c.back)}</p></div>`).join('')}`;
+  return `<div class="viewhead"><h1>🙈 Memorizar</h1><span class="meta" id="memoCuenta">${memoCuentaTxt()}</span></div>
+  <p class="meta">Lee la pregunta, intenta decir la respuesta en voz alta y toca <b>Destapar</b> para comprobar.</p>
+  <div class="bar"><i id="memoBar" style="width:0%"></i></div>
+  <div class="memoList">${cards.map((c,i)=>`<div class="memo" data-memo="${i}">
+    <b class="memoQ">${esc(c.front)}</b>
+    <button type="button" class="memoA" data-action="memoVer" data-i="${i}" aria-expanded="false"><span class="memoTapa">👀 Destapar respuesta</span><span class="memoTxt">${esc(c.back)}</span></button>
+    <div class="memoYo" role="group" aria-label="¿La recordaste?"><button type="button" class="sec sm" data-action="memoYo" data-i="${i}" data-ok="1">😊 La recordé</button><button type="button" class="sec sm" data-action="memoYo" data-i="${i}" data-ok="0">😕 No</button></div>
+  </div>`).join('')}</div>
+  <div class="row" style="justify-content:center;flex-wrap:wrap;margin-top:16px"><button class="sec" data-action="redoTool">🔀 Mezclar de nuevo</button><button class="pr" data-action="openTool" data-tool="flashcards" data-mat="${m.id}">Ponme a prueba →</button></div>`;
 }
+function memoCuentaTxt(){const r=toolState.memo||{},v=Object.values(r);return v.filter(x=>x===1).length+' / '+(toolState.cards||[]).length+' recordadas'}
 
+/* ¿Qué concepto?: se muestra la definición y se elige el término entre 4 opciones (con pista opcional) */
+function armarConcepto(cards){
+  const frentes=[...new Set(cards.map(c=>limpioT(c.front)))];
+  const conOpc=frentes.length>=4;
+  const qs=shuffle(cards).map(c=>({card:c,opts:conOpc?shuffle([limpioT(c.front),...shuffle(frentes.filter(f=>f!==limpioT(c.front))).slice(0,3)]):null,sel:null}));
+  return{cards,qs,idx:0,score:0,combo:0,mejor:0,pista:false,flipped:false};
+}
+function pistaDe(t){
+  const pal=String(t).trim().split(/\s+/);
+  return pal.map(w=>w.charAt(0)+'·'.repeat(Math.max(0,Math.min(w.length-1,12)))).join(' ')+' ('+pluralMv(pal.length,'palabra','palabras')+')';
+}
 function toolConceptoHTML(){
-  const{cards,idx,flipped}=toolState;
-  if(!cards.length)return noCardsMsg();
-  if(idx>=cards.length)return `<div class="empty"><h2>🎉 ¡Listo!</h2><p>Repasaste ${cards.length} conceptos.</p><button class="pr" data-action="redoTool">Repetir</button></div>`;
-  const c=cards[idx];
+  const{qs,idx,score}=toolState;
+  if(!qs.length)return noCardsMsg();
+  if(idx>=qs.length)return finJuegoHTML({titulo:'💡 ¡Adivinaste los conceptos!',ok:score,total:qs.length,linea:toolState.mejor>=3?'Mejor racha: '+toolState.mejor+' seguidas 🔥':''});
+  const q=qs[idx],c=q.card,correcta=limpioT(c.front),contesto=q.sel!=null,acierto=contesto&&q.sel===correcta;
+  const pista=`<div class="pistaBox">${toolState.pista?`<span>💡 Pista: <b>${esc(pistaDe(correcta))}</b></span>`:`<button type="button" class="sec sm" data-action="conceptoPista" ${contesto?'disabled':''}>💡 Ver pista</button>`}</div>`;
+  let cuerpo;
+  if(q.opts){
+    cuerpo=q.opts.map((o,i)=>{
+      let cls='sec optBtn';
+      if(contesto){if(o===correcta)cls+=' ok '+(acierto?'pop':'reveal');else if(o===q.sel)cls+=' no shake'}
+      return `<button class="${cls}" data-action="conceptoOpt" data-i="${i}" ${contesto?'disabled':''}>${esc(o)}</button>`;
+    }).join('');
+  }else{
+    cuerpo=contesto?`<div class="fb ${acierto?'fbOk':'fbNo'}">Concepto: <b>${esc(correcta)}</b></div>`
+      :(toolState.flipped?`<p class="meta">Concepto:</p><h3>${esc(correcta)}</h3><div class="row" style="justify-content:center"><button class="sec" data-action="conceptoAuto" data-ok="0">😕 Fallé</button><button class="pr" data-action="conceptoAuto" data-ok="1">😊 Acerté</button></div>`
+      :`<button class="sec" data-action="conceptoRevelar">Mostrar respuesta</button>`);
+  }
   return `
-  <div class="viewhead"><h1>💡 ¿Qué concepto?</h1><span class="meta">${idx+1} / ${cards.length}</span></div>
-  <div class="card">
-    <p class="meta">Definición / pista:</p>
-    <h3>${esc(c.back)}</h3>
-    ${flipped?`<hr style="border-color:var(--b);margin:12px 0"><p class="meta">Concepto:</p><h3>${esc(c.front)}</h3>`:`<button class="sec" data-action="flipCard">Mostrar respuesta</button>`}
+  <div class="viewhead"><h1>💡 ¿Qué concepto?</h1><span class="meta">${idx+1} / ${qs.length}</span></div>
+  ${marcadorHTML(idx,qs.length,score,toolState.combo||0)}
+  <div class="card qCard ${contesto?'answered':''}">
+    <p class="meta" style="margin-top:0">¿A qué concepto se refiere?</p>
+    <h3 class="conceptoDef">${esc(c.back)}</h3>
+    ${pista}
+    ${cuerpo}
   </div>
-  ${flipped?`<div class="row" style="justify-content:center"><button class="sec" data-action="cardAnswer" data-know="0">😕 Fallé</button><button class="pr" data-action="cardAnswer" data-know="1">😊 Acerté</button></div>`:''}`;
+  ${contesto&&q.opts?feedbackHTML(acierto,{correcta,card:c},idx):''}
+  ${contesto?`<button class="pr nextBtn" data-action="conceptoNext">${idx+1>=qs.length?'Ver resultado →':'Siguiente →'}</button>`:''}`;
 }
 
+/* Emparejar: columna de términos y columna de definiciones mezcladas. Se toca uno de cada lado. */
+const EMP_PARES=6;
+function armarEmparejar(cards){
+  const vistos=new Set(),pares=[];
+  shuffle(cards).forEach(c=>{const k=limpioT(c.front)+'|'+limpioT(c.back);if(!vistos.has(k)&&pares.length<EMP_PARES){vistos.add(k);pares.push({id:c.id,front:limpioT(c.front),back:limpioT(c.back)})}});
+  const idx=pares.map((_,i)=>i);
+  return{pares,izq:shuffle(idx),der:shuffle(idx),hechos:[],errores:0,t0:Date.now(),fin:false,total:cards.length};
+}
+function toolEmparejarHTML(){
+  const st=toolState,{pares}=st;
+  if(pares.length<2)return '<div class="empty">Para emparejar hacen falta al menos 2 tarjetas con frente y reverso en esta materia (o en lo que elegiste en «Practicar con»).</div>';
+  if(st.fin){
+    const seg=st.seg,rec=st.recordAntes,nuevo=!rec||seg<rec,n=st.errores===0?3:st.errores<=2?2:1;
+    return finJuegoHTML({titulo:'🧩 ¡Todas emparejadas!',ok:pares.length,total:pares.length+st.errores,estrellas:n,
+      msg:n===3?'¡Sin un solo error! 🤩':n===2?'¡Muy bien! 🎉':'¡Lo lograste! La próxima, con menos errores 💪',
+      linea:'Tiempo: <b>'+fmtSecs(seg)+'</b> · '+pluralMv(st.errores,'error','errores')+(nuevo?' · 🏆 ¡Nuevo récord!':' · récord: '+fmtSecs(rec)),
+      redo:st.total>pares.length?'Otra ronda con otras tarjetas':'Jugar otra vez'});
+  }
+  const hecho=i=>st.hechos.includes(i);
+  return `<div class="viewhead"><h1>🧩 Emparejar</h1><span class="meta">⏱️ <span id="empTime">${fmtSecs(Math.floor((Date.now()-st.t0)/1000))}</span></span></div>
+  <div class="bar qbar"><i id="empBar" style="width:${Math.round(st.hechos.length/pares.length*100)}%"></i></div>
+  <div class="marcador"><span class="chip" id="empCuenta">🧩 ${st.hechos.length} / ${pares.length} parejas</span><span class="chip" id="empErr">❌ ${st.errores}</span></div>
+  <p class="meta">Toca un término y después su definición. Si aciertas, desaparecen.</p>
+  <div class="empGrid">
+    <div class="empCol" role="group" aria-label="Términos">${st.izq.map(i=>`<button type="button" class="empT izq${hecho(i)?' ok hecha':''}" data-action="empPick" data-lado="izq" data-i="${i}" ${hecho(i)?'disabled':''}>${esc(pares[i].front)}</button>`).join('')}</div>
+    <div class="empCol" role="group" aria-label="Definiciones">${st.der.map(i=>`<button type="button" class="empT der${hecho(i)?' ok hecha':''}" data-action="empPick" data-lado="der" data-i="${i}" ${hecho(i)?'disabled':''}>${esc(pares[i].back)}</button>`).join('')}</div>
+  </div>`;
+}
+/* Se maneja sin repintar la pantalla, para que las animaciones se vean y el reloj siga */
+function empPick(b){
+  const st=toolState;if(!st||!st.pares||st.fin||b.disabled)return;
+  const lado=b.dataset.lado,i=+b.dataset.i;
+  const grid=b.closest('.empGrid');if(!grid)return;
+  grid.querySelectorAll('.empT.'+lado+'.sel').forEach(x=>x.classList.remove('sel'));
+  b.classList.add('sel');
+  const L=grid.querySelector('.empT.izq.sel'),R=grid.querySelector('.empT.der.sel');
+  if(!L||!R)return;
+  const pi=st.pares[+L.dataset.i],pd=st.pares[+R.dataset.i];
+  const ok=+L.dataset.i===+R.dataset.i||pi.back===pd.back||pi.front===pd.front;     // tarjetas repetidas también valen
+  L.classList.remove('sel');R.classList.remove('sel');
+  if(ok){
+    const a=+L.dataset.i,d=+R.dataset.i;
+    st.hechos.push(a);if(d!==a){st.hechos.push(d)}
+    [L,R].forEach(x=>{x.classList.add('ok','pop');x.disabled=true;setTimeout(()=>x.classList.add('hecha'),450)});
+    if(d!==a){                                                        // los "gemelos" de texto igual también se marcan
+      const L2=grid.querySelector('.empT.izq[data-i="'+d+'"]'),R2=grid.querySelector('.empT.der[data-i="'+a+'"]');
+      [L2,R2].forEach(x=>{if(x){x.classList.add('ok','hecha');x.disabled=true}});
+    }
+    if(!reducido())explotar(R);
+  }else{
+    st.errores++;
+    [L,R].forEach(x=>{x.classList.remove('shake');void x.offsetWidth;x.classList.add('no','shake');setTimeout(()=>x.classList.remove('no','shake'),600)});
+  }
+  const n=new Set(st.hechos).size;
+  const cu=$('empCuenta');if(cu)cu.textContent='🧩 '+n+' / '+st.pares.length+' parejas';
+  const er=$('empErr');if(er)er.textContent='❌ '+st.errores;
+  const br=$('empBar');if(br)br.style.width=Math.round(n/st.pares.length*100)+'%';
+  if(n>=st.pares.length){
+    st.fin=true;st.seg=Math.max(1,Math.round((Date.now()-st.t0)/1000));clearRepasoTimer();
+    const k='emparejar_'+route.materiaId;st.recordAntes=leerRecord(k);
+    if(!st.recordAntes||st.seg<st.recordAntes)guardarRecord(k,st.seg);
+    st.fxFin=true;st.fxPct=st.errores<=2?1:0;
+    setTimeout(()=>{if(toolState===st&&route.tool==='emparejar')render()},650);
+  }
+}
+
+const REPASO_SEG=300;
 function toolRepasoHTML(){
   const{cards,idx,flipped,secondsLeft,known,seen}=toolState;
   if(!cards.length)return noCardsMsg();
-  if(secondsLeft<=0)return `<div class="empty"><h2>⏱️ ¡Tiempo!</h2><p>Repasaste ${seen} tarjetas, sabías ${known}.</p><button class="pr" data-action="redoTool">Repetir</button></div>`;
-  const c=cards[idx%cards.length];
+  if(secondsLeft<=0){
+    const rec=toolState.recordAntes||0,nuevo=known>rec&&known>0;
+    return finJuegoHTML({titulo:'⏱️ ¡Tiempo!',ok:known,total:seen,
+      linea:'En 5 minutos te supiste <b>'+known+'</b> de '+pluralMv(seen,'tarjeta','tarjetas')+'. '+(nuevo?'🏆 ¡Nuevo récord!':'Tu récord: '+rec+'.'),
+      redo:'Intentar superar mi récord'});
+  }
+  const c=cards[idx%cards.length],rec=leerRecord('repaso_'+route.materiaId);
   return `
-  <div class="viewhead"><h1>⏱️ Repaso 5 min</h1><span class="meta" id="repasoTimerText">${fmtSecs(secondsLeft)}</span></div>
+  <div class="viewhead"><h1>⏱️ Contrarreloj</h1><span class="meta reloj">⏱️ <b id="repasoTimerText">${fmtSecs(secondsLeft)}</b></span></div>
+  <div class="bar tiempo"><i id="repasoBar" style="width:${secondsLeft/REPASO_SEG*100}%"></i></div>
+  <div class="marcador"><span class="chip">✅ ${known} ${known==1?'acierto':'aciertos'}</span>${rec?`<span class="chip">🏆 Récord: ${rec}</span>`:''}${(toolState.combo||0)>=2?`<span class="comboChip">🔥 ${toolState.combo} seguidas</span>`:''}</div>
   <div class="flashcard ${flipped?'flip':''}" data-action="flipCard" role="button" tabindex="0" aria-pressed="${flipped}" aria-label="${flipped?'Respuesta':'Pregunta'}: ${esc(flipped?c.back:c.front)}. Pulsa Enter para voltear.">
-    <div class="fcInner" aria-hidden="true"><div class="fcFace fcFront">${esc(c.front)}</div><div class="fcFace fcBack">${esc(c.back)}</div></div>
+    <div class="fcInner" aria-hidden="true"><div class="fcFace fcFront"><span class="fcTag">Pregunta</span>${esc(c.front)}</div><div class="fcFace fcBack"><span class="fcTag">Respuesta</span>${esc(c.back)}</div></div>
   </div>
-  <p class="meta" style="text-align:center">Tocá para voltear</p>
+  <p class="meta" style="text-align:center">¡Rápido! Toca para voltear y di si la sabías</p>
   <div class="row" style="justify-content:center">
     <button class="sec" data-action="cardAnswer" data-know="0">😕 Repasar</button>
     <button class="pr" data-action="cardAnswer" data-know="1">😊 La sé</button>
@@ -416,11 +607,12 @@ function toolQuizHTML(isExam){
     <h2>${isExam?'📝':'❓'} ¡Listo!</h2>
     <div class="ringWrap ${tono}"><svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="rbg" cx="60" cy="60" r="52"/><circle class="rfg" cx="60" cy="60" r="52" style="--p:${pct}"/></svg>
       <div class="ringTxt"><b class="countUp" data-to="${score}">${score}</b><span>/ ${questions.length}</span></div></div>
+    ${estrellasHTML(estrellasDe(score/questions.length))}
     <p class="resMsg">${msg}</p>
     <p class="meta">Resultado: <b>${score} / ${questions.length}</b> · ${pct}%${(state.cortes.find(x=>x.id===toolState.corteId)||{}).name?' · '+esc(state.cortes.find(x=>x.id===toolState.corteId).name):''}</p>
     ${premiosHTML()}
     ${isExam?`<div class="resList">${questions.map((q,i)=>`<p class="meta resRow ${esAcierto(q)?'bien':'mal'}" style="--i:${Math.min(i,14)}">${i+1}. ${esc(q.enun)}${q.tipo==='vf'?' «'+esc(q.afirm)+'»':''} — ${esAcierto(q)?'✅':'❌ correcta: '+esc(q.correcta)}${esAcierto(q)?'':explicacionHTML(q.card&&q.card.exp)}</p>`).join('')}</div>`:''}
-    <button class="pr" data-action="redoTool">Repetir</button></div>`;
+    <div class="row finBtns"><button class="pr" data-action="redoTool">Jugar otra vez</button><button class="sec" data-action="backMateria" data-id="${route.materiaId}">Elegir otra actividad</button></div></div>`;
   }
   const q=questions[idx];
   const contesto=!!q.selected,acierto=contesto&&esAcierto(q);

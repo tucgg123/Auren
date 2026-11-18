@@ -26,12 +26,16 @@ function folderSemestreHTML(sem){
     <div class="fchips">${mats.slice(0,3).map(m=>`<span class="fchip">${esc(m.name)}</span>`).join('')}${mats.length>3?`<span class="fchip">+${mats.length-3}</span>`:''}</div>
   </div>`;
 }
-const dwAbierto=n=>{ui.semDr=ui.semDr||{1:true,2:false};return !!ui.semDr[n]};
-function dwHTML(n,titulo,sub,cuerpo){
-  const ab=dwAbierto(n);
-  return `<section class="dw${ab?' open':''}" data-dw="${n}">
-    <button type="button" class="dwHead" data-action="toggleDw" data-n="${n}" aria-expanded="${ab}" aria-controls="dwB${n}"><span class="dnum">${n}</span><span class="dwT"><b>${titulo}</b><small>${sub}</small></span><span class="chev" aria-hidden="true">▼</span></button>
-    <div class="dwBody" id="dwB${n}"><div class="dwInner"><div class="dwPad">${cuerpo}</div></div></div>
+/* ---------- Cajones: bloques plegables que empiezan CERRADOS ----------
+   Así la pantalla muestra solo los títulos (con un resumen corto) y cada quien abre lo que necesita.
+   Lo abierto se recuerda en memoria (ui.dw) mientras la app esté abierta; al volver a entrar, todo empieza cerrado.
+   k: clave única · titulo y sub: texto ya escapado · ico: emoji o número · aviso: número opcional que resalta algo pendiente */
+const dwAbierto=k=>{ui.dw=ui.dw||{};return !!ui.dw[k]};
+function dwHTML(k,titulo,sub,cuerpo,ico,aviso){
+  const ab=dwAbierto(k),id='dwB-'+String(k).replace(/[^\w-]/g,'_');
+  return `<section class="dw${ab?' open':''}" data-key="dw-${esc(k)}">
+    <button type="button" class="dwHead" data-action="toggleDw" data-k="${esc(k)}" aria-expanded="${ab}" aria-controls="${id}"><span class="dnum" aria-hidden="true">${ico}</span><span class="dwT"><b>${titulo}</b>${sub?`<small>${sub}</small>`:''}</span>${aviso?`<span class="dwAviso">${aviso}</span>`:''}<span class="chev" aria-hidden="true">▼</span></button>
+    <div class="dwBody" id="${id}"><div class="dwInner"><div class="dwPad">${cuerpo}</div></div></div>
   </section>`;
 }
 function viewSemestreHTML(sem,sems,todas){
@@ -44,8 +48,8 @@ function viewSemestreHTML(sem,sems,todas){
   return `<div class="mv"><div class="mv-col">
     <nav class="crumbs" aria-label="Ruta"><button type="button" class="linkbtn" data-action="backMaterias">← Mis materias</button><span aria-hidden="true">/</span><span>${esc(sem.name)}</span></nav>
     <div class="viewhead"><div><h1>${esc(iconCarpeta(sem))} ${esc(sem.name)}</h1><p class="sub">${pluralMv(mats.length,'materia','materias')}</p></div><span class="semAvg" title="Promedio de la carpeta">${p==null?'':'⌀ '+fmtN(p)}</span></div>
-    ${dwHTML(1,'Materias','Las materias de esta carpeta · '+mats.length,materias)}
-    ${dwHTML(2,'Mis apuntes por materia','Tus apuntes de los temas (pestaña «Mis apuntes» de cada tema) · '+pluralMv(nAp,'apunte','apuntes')+' en total',apuntes)}
+    ${dwHTML('sem:'+sem.id+':mat','Materias',pluralMv(mats.length,'materia','materias')+' en esta carpeta',materias,'📚')}
+    ${dwHTML('sem:'+sem.id+':ap','Mis apuntes por materia','Tus apuntes de los temas (pestaña «Mis apuntes» de cada tema) · '+pluralMv(nAp,'apunte','apuntes')+' en total',apuntes,'📝')}
   </div><aside class="mv-stats" aria-label="Resumen del estudiante">${matStatsHTML(sems.length,todas)}</aside></div>`;
 }
 function viewMateriasHTML(){
@@ -126,15 +130,17 @@ function matStatsHTML(nSem,mats){
   const C=314.16,d=avg==null?0:Math.max(0,Math.min(avg/mx,1))*C;
   const hl=(lbl,x)=>`<div><span>${lbl}</span><b style="--mc:${matColor(x.m)}"><i></i><em>${esc(x.m.name)}</em> ${fmtN(x.a)}</b></div>`;
   const resaltes=(best?hl('Mejor promedio',best):'')+(low?hl('Por reforzar',low):'');
-  return `<section class="stPn"><div class="stK">Promedio general</div>
-      <div class="stRing"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="none" stroke="var(--b)" stroke-width="9"/><circle cx="60" cy="60" r="50" fill="none" stroke="var(--a)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${d.toFixed(1)} ${C}" transform="rotate(-90 60 60)"/></svg>
+  const prom=`<div class="stRing"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="none" stroke="var(--b)" stroke-width="9"/><circle cx="60" cy="60" r="50" fill="none" stroke="var(--a)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${d.toFixed(1)} ${C}" transform="rotate(-90 60 60)"/></svg>
       <div class="stRc"><b>${avg==null?'—':fmtN(avg)}</b><span>/ ${fmtN(mx)}</span></div></div>
       <p class="stNote">${avg==null?'Aún no hay notas registradas':'Promedio de '+pluralMv(rows.length,'materia con notas','materias con notas')}</p>
-      <div class="stHl">${resaltes}</div></section>
-    <details class="drawer cal" open><summary class="dh"><span>📅 Calendario</span><span class="da">${MESES[new Date(new Date().getFullYear(),new Date().getMonth()+(ui.calM||0),1).getMonth()].slice(0,3)}<span class="chev">▾</span></span></summary>${miniCalHTML()}</details>
-    <section class="stPn"><div class="stK">Mi carrera</div><div class="stKp">
+      <div class="stHl">${resaltes}</div>`;
+  const hoy=ymd(new Date()),prox=eventosTodos().filter(e=>e.date>=hoy).sort(sortEv)[0];
+  const carrera=`<div class="stKp">
       <div><b>${nSem}</b><span>${nSem==1?'carpeta':'carpetas'}</span></div><div><b>${mats.length}</b><span>${mats.length==1?'materia':'materias'}</span></div>
-      <div><b>${temas}</b><span>${temas==1?'tema':'temas'}</span></div><div><b>${nTarj}</b><span>${nTarj==1?'tarjeta':'tarjetas'}</span></div></div></section>`;
+      <div><b>${temas}</b><span>${temas==1?'tema':'temas'}</span></div><div><b>${nTarj}</b><span>${nTarj==1?'tarjeta':'tarjetas'}</span></div></div>`;
+  return dwHTML('st:prom','Promedio general',avg==null?'Aún sin notas':fmtN(avg)+' de '+fmtN(mx),prom,'📊')
+    +dwHTML('st:cal','Calendario',prox?'Próximo: '+esc(prox.title)+' · '+esc(fmtDateLong(prox.date)):'Sin eventos próximos',miniCalHTML(),'📅')
+    +dwHTML('st:car','Mi carrera',pluralMv(mats.length,'materia','materias')+' · '+pluralMv(nTarj,'tarjeta','tarjetas'),carrera,'🎓');
 }
 
 /* ================= VISTA: DETALLE DE MATERIA ================= */
@@ -147,41 +153,16 @@ function viewMateriaDetailHTML(materiaId){
   }
   const cortes=state.cortes.filter(c=>c.materiaId===materiaId);
   const iaSel=cortes.some(c=>c.id===ui.iaCorte)?ui.iaCorte:(cortes[0]&&cortes[0].id);
+  const mk=k=>'m:'+materiaId+':'+k,nTemas=state.temas.filter(x=>x.materiaId===materiaId).length;
   if(m.rol!=='estudiante'&&(!ui.iaUso||(!ui.iaUso.cargando&&Date.now()-(ui.iaUso.t||0)>60000)))setTimeout(cargarUsoIA,0);   // se consulta el cupo al abrir la materia
   return `
     <button class="sec" data-action="${m.rol==='docente'?'backDocente':'backMaterias'}">${m.rol==='docente'?'← Espacio docente':'← '+esc(((state.semesters.find(s=>s.id===m.semesterId&&!s.oculto))||{}).name||'Mis materias')}</button>
     <div class="hero" style="--mc:${matColor(m)}"><div class="heroDot"></div><div><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1><p class="sub">${esc((state.semesters.find(x=>x.id===m.semesterId)||{}).name||'')}${state.semesters.find(x=>x.id===m.semesterId)?' · ':''}${pluralMv(state.temas.filter(x=>x.materiaId===m.id).length,'tema','temas')} · ${pluralMv(getCardsTodas(m.id).length,'tarjeta','tarjetas')}${m.semestre?` · <span class="chip">Semestre ${m.semestre}${m.curso?' · Curso '+esc(m.curso):''}</span>`:''}</p></div></div>
-    ${m.rol==='docente'?docentePanelHTML(m):m.rol==='estudiante'?estudianteDocenteBoxHTML(m)+anunciosEstudianteHTML(m)+docsOriginalesHTML(m)+examenesEstudianteHTML(m):compartidoBoxHTML(m)}
-
-    <section class="estudiarSec">
-      <div class="viewhead"><h2>🎯 Estudiar</h2></div>
-      <p class="meta">Estas herramientas usan las tarjetas (frente/reverso) que agregues dentro de cada tema.</p>
-      ${alcanceHTML(materiaId)}
-      <div class="toolGrid">
-        <button class="sec" data-action="openTool" data-tool="flashcards" data-mat="${materiaId}">🔄 Flashcards</button>
-        <button class="sec" data-action="openTool" data-tool="memorizar" data-mat="${materiaId}">📖 Memorizar</button>
-        <button class="sec" data-action="openTool" data-tool="quiz" data-mat="${materiaId}">❓ Quiz</button>
-        <button class="sec" data-action="openTool" data-tool="examen" data-mat="${materiaId}">📝 Modo examen</button>
-        <button class="sec" data-action="openTool" data-tool="escrito" data-mat="${materiaId}">✍️ Examen escrito</button>
-        <button class="sec" data-action="openTool" data-tool="concepto" data-mat="${materiaId}">💡 ¿Qué concepto?</button>
-        <button class="sec" data-action="openTool" data-tool="hoy" data-mat="${materiaId}">📅 Repaso de hoy${sesionHoy(materiaId).length?' ('+sesionHoy(materiaId).length+')':''}</button>
-        <button class="sec" data-action="openTool" data-tool="falle" data-mat="${materiaId}">🎯 Repasar lo que fallé${tarjetasFalladas(materiaId).length?' ('+tarjetasFalladas(materiaId).length+')':''}</button>
-        <button class="sec" data-action="openTool" data-tool="repaso" data-mat="${materiaId}">⏱️ Repaso 5 min</button>
-        <button class="sec" data-action="openTool" data-tool="comparar" data-mat="${materiaId}">⚖️ Comparar</button>
-        <button class="sec" data-action="openTool" data-tool="progreso" data-mat="${materiaId}">📊 Mi progreso</button>
-        <button class="sec" data-action="openTool" data-tool="referencias" data-mat="${materiaId}">📚 Referencias</button>
-      </div>
-    </section>
-
-    <section class="${m.rol==='estudiante'?'docRO':''}">
-      <div class="viewhead"><h2>📁 Cortes</h2><button class="pr" data-action="addCorte" data-mat="${materiaId}">+ Agregar corte</button></div>
-      <div class="card notasBox" style="margin-bottom:14px;${m.rol==='docente'?'display:none':''}">
-        <b style="font-size:.9em">🧮 Mi promedio en esta materia</b>
-        <div id="corteAvgBox" style="margin-top:8px">${corteAvgHTML(cortes)}</div>
-      </div>
-      ${puedeSubir()?`      <div class="card iaCard" style="margin-bottom:14px">
-        <b style="font-size:.9em">🤖 Generar tema con IA</b>
-        <p class="meta" style="margin-top:4px">Sube un PDF o una presentación (.pptx), elige en qué corte guardarlo y la IA organiza el contenido en secciones y crea las tarjetas.</p>
+    ${m.rol==='docente'?docentePanelHTML(m):cajonesMateriaHTML(m)}
+    ${estudiarCajonHTML(m)}
+    ${m.rol==='docente'?'':dwHTML(mk('prom'),'Mi promedio en esta materia','<span id="corteAvgSub">'+promSubHTML(cortes)+'</span>',`<div id="corteAvgBox">${corteAvgHTML(cortes)}</div>`,'🧮')}
+    ${puedeSubir()?dwHTML(mk('ia'),'Generar tema con IA','Sube un PDF o una presentación y la IA arma el tema',`
+        <p class="meta" style="margin-top:0">Sube un PDF o una presentación (.pptx), elige en qué corte guardarlo y la IA organiza el contenido en secciones y crea las tarjetas.</p>
         <label class="lbl" for="iaCorte">Guardar en</label>
         <select class="fld" id="iaCorte" data-action="iaCorteSel">${cortes.map(c=>`<option value="${c.id}" ${c.id===iaSel?'selected':''}>${esc(c.name)||'(corte sin nombre)'}</option>`).join('')}</select>
         <input type="file" id="iaFileInput" accept=".pdf,.pptx" data-mat="${materiaId}" style="display:none">
@@ -189,17 +170,37 @@ function viewMateriaDetailHTML(materiaId){
         <input type="file" id="pdfCompInput" accept=".pdf,application/pdf" style="display:none" aria-hidden="true" tabindex="-1">
         <button class="sec" data-action="pdfPick" style="margin-top:10px">🗜️ Comprimir un PDF</button>
         <div id="iaCupo" style="margin-top:10px">${cupoIAHTML()}</div>
-        <div id="iaStatus" class="meta" style="margin-top:8px"></div>
-      </div>`:''}
-      ${cortes.map(c=>corteFolder(c,materiaId)).join('')}
-    </section>
-
+        <div id="iaStatus" class="meta" style="margin-top:8px"></div>`,'🤖'):''}
+    <div class="${m.rol==='estudiante'?'docRO':''}">
+      ${dwHTML(mk('cortes'),'Cortes y temas',pluralMv(cortes.length,'corte','cortes')+' · '+pluralMv(nTemas,'tema','temas'),
+        (cortes.map(c=>corteFolder(c,materiaId)).join('')||'<div class="empty">Esta materia aún no tiene cortes.</div>')
+        +`<button class="sec" style="margin-top:4px" data-action="addCorte" data-mat="${materiaId}">+ Agregar corte</button>`,'📁')}
+    </div>
   `;
+}
+/* Cajones de arriba en la materia: lo del profesor (estudiante) o lo de compartir (materia propia) */
+function cajonesMateriaHTML(m){
+  const mk=k=>'m:'+m.id+':'+k;
+  if(m.rol!=='estudiante')return dwHTML(mk('comp'),m.sharedId?'Materia compartida':'Estudiar con otras personas',m.sharedId?'Código, enlace e integrantes del grupo':'Comparte esta materia con tus compañeros',compartidoBoxHTML(m),'🤝');
+  let out='';
+  const exs=examenesDe(m),pend=exs.filter(ex=>!miIntento(m,ex.id)&&examAbierto(ex)).length;
+  const ex=examenesEstudianteHTML(m);
+  if(ex)out+=dwHTML(mk('ex'),'Exámenes de tu profesor',pend?pluralMv(pend,'examen por presentar','exámenes por presentar'):pluralMv(exs.length,'examen','exámenes'),ex,'📝',pend||'');
+  const nAn=anunciosDe(m).length,an=anunciosEstudianteHTML(m);
+  if(an)out+=dwHTML(mk('an'),'Anuncios de tu profesor',pluralMv(Math.min(nAn,3),'anuncio reciente','anuncios recientes'),an,'📣');
+  const nDoc=state.temas.filter(x=>x.materiaId===m.id&&x.archivo).length,dc=docsOriginalesHTML(m);
+  if(dc)out+=dwHTML(mk('docs'),'Documentos originales',pluralMv(nDoc,'archivo para descargar','archivos para descargar'),dc,'📎');
+  out+=dwHTML(mk('prof'),'Materia de '+esc(nombreDocente(m)),'Solo lectura · aquí puedes salir de la materia',estudianteDocenteBoxHTML(m),'👩‍🏫');
+  return out;
+}
+function promSubHTML(cortes){
+  const k=corteStats(cortes);
+  return k.avg==null?'Sin notas todavía · meta '+fmtN(k.goal):fmtN(k.avg)+' de '+fmtN(k.scale)+' · meta '+fmtN(k.goal)+(k.avg>=k.goal?' ✅':'');
 }
 function corteFolder(c,materiaId){
   const temas=state.temas.filter(t=>t.corteId===c.id).sort((a,b)=>b.updatedAt-a.updatedAt);
   const hasScore=c.score!=null&&c.score!=='';
-  const open=ui.open[c.id]!==false;
+  const open=ui.open[c.id]===true;                       // los cortes empiezan cerrados
   return `<details class="folder" data-corte="${c.id}" ${open?'open':''}>
     <summary>
       <span class="fHead"><span class="ft">📁 ${esc(c.name)||'(corte sin nombre)'}</span>
@@ -243,6 +244,7 @@ function refreshCorteAvg(materiaId){
   const cortes=state.cortes.filter(c=>c.materiaId===materiaId);
   const box=$('corteAvgBox');
   if(box)box.innerHTML=corteAvgHTML(cortes);
+  const sub=$('corteAvgSub');if(sub)sub.innerHTML=promSubHTML(cortes);
 }
 const ui={open:{},sec:{},tab:{}};
 function fmtBody(txt){

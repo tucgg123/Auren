@@ -50,13 +50,9 @@ function viewPerfilHTML(){
         <div><b>${globalAvg==null?'—':fmtN(globalAvg)}</b>promedio global</div>
       </div>
     </div>
-    <div class="card"><h3>Avatar</h3><div class="avatarPicker">${AV.map(a=>`<button class="avBtn ${a===p.avatar?'on':''}" data-action="setAvatar" data-a="${a}">${a}</button>`).join('')}</div></div>
-    ${avisosCardHTML()}
-    ${fxCardHTML()}
-    ${datosCardHTML()}
-    <div class="card">
-      <h3>Editar perfil</h3>
-      <label class="lbl">Nombre</label><input class="fld" data-action="profileField" data-f="name" value="${esc(p.name)}" maxlength="40">
+    ${dwHTML('pf:av','Avatar','Elige el emoji que te representa',`<div class="avatarPicker">${AV.map(a=>`<button class="avBtn ${a===p.avatar?'on':''}" data-action="setAvatar" data-a="${a}">${a}</button>`).join('')}</div>`,esc(p.avatar))}
+    ${dwHTML('pf:ed','Editar perfil','Nombre, carrera, escala de notas y meta',`
+      <label class="lbl" style="margin-top:0">Nombre</label><input class="fld" data-action="profileField" data-f="name" value="${esc(p.name)}" maxlength="40">
       <label class="lbl">Carrera y universidad</label><input class="fld" data-action="profileField" data-f="career" value="${esc(p.career)}" maxlength="80">
       <div class="two">
         <div><label class="lbl">Próximo examen</label>${proxExamenHTML()}</div>
@@ -66,14 +62,14 @@ function viewPerfilHTML(){
         <div><label class="lbl">Meta de promedio (sobre ${scaleMax()})</label><input class="fld" type="number" min="0" max="${scaleMax()}" step="0.1" data-action="profileField" data-f="goal" value="${p.goal}"></div>
         <div></div>
       </div>
-      <label class="lbl">Notas personales</label><textarea class="fld" data-action="profileField" data-f="notes" placeholder="Ideas, dudas, recordatorios…">${esc(p.notes)}</textarea>
-    </div>
-    ${rolCardHTML()}
-    <div class="card">
-      <h3>Cuenta</h3>
-      <p class="meta">Conectado como <b>${esc(auth.currentUser&&auth.currentUser.email||'')}</b></p>
-      <button class="sec" data-action="logout">🚪 Cerrar sesión</button> <button class="sec" data-action="borrarCuenta" style="color:var(--no)">🗑️ Eliminar mi cuenta</button>
-    </div>
+      <label class="lbl">Notas personales</label><textarea class="fld" data-action="profileField" data-f="notes" placeholder="Ideas, dudas, recordatorios…">${esc(p.notes)}</textarea>`,'✏️')}
+    ${dwHTML('pf:avisos','Avisos y recordatorios',avisosActivos()?'Activados':'Desactivados',avisosCardHTML(),'🔔')}
+    ${dwHTML('pf:fx','Efectos visuales','Fondo animado y ahorro de batería',fxCardHTML(),'✨')}
+    ${dwHTML('pf:datos','Tus datos','Descarga una copia de respaldo',datosCardHTML(),'💾')}
+    ${dwHTML('pf:rol','Tu rol',esc(nombreRol(p.rol||'estudiante')),rolCardHTML(),'🎓')}
+    ${dwHTML('pf:cuenta','Cuenta',esc(auth.currentUser&&auth.currentUser.email||''),`
+      <p class="meta" style="margin-top:0">Conectado como <b>${esc(auth.currentUser&&auth.currentUser.email||'')}</b></p>
+      <button class="sec" data-action="logout">🚪 Cerrar sesión</button> <button class="sec" data-action="borrarCuenta" style="color:var(--no)">🗑️ Eliminar mi cuenta</button>`,'🔑')}
   `;
 }
 
