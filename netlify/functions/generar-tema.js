@@ -84,7 +84,9 @@ const LIMITE_TEXTO = 60000;
 const LIMITE_PDF_B64 = 12 * 1024 * 1024; // ~8 MB de PDF en base64
 
 // Hecho por Sebastián Poveda y Santiago Romero. 2026 · llamada a Gemini con tiempo límite y reintentos
-async function llamarGemini(apiKey, prompt, limiteMs = LIMITE_MS, pdfBase64 = null) {
+// "opciones" deja reutilizar esta función con otro esquema (por ejemplo, el chat de preguntas sobre un tema)
+async function llamarGemini(apiKey, prompt, limiteMs = LIMITE_MS, pdfBase64 = null, opciones = {}) {
+  const esquema = opciones.esquema || ESQUEMA_RESPUESTA;
   const inicio = Date.now();
   let ultima;
   for (const modelo of MODELOS) {
@@ -97,10 +99,10 @@ async function llamarGemini(apiKey, prompt, limiteMs = LIMITE_MS, pdfBase64 = nu
       const timer = setTimeout(() => ctrl.abort(), restante);
       const generationConfig = {
         responseMimeType: 'application/json',
-        temperature: 0.4,
-        maxOutputTokens: 12288
+        temperature: opciones.temperatura != null ? opciones.temperatura : 0.4,
+        maxOutputTokens: opciones.maxTokens || 12288
       };
-      if (usaEsquema) generationConfig.responseSchema = ESQUEMA_RESPUESTA;
+      if (usaEsquema) generationConfig.responseSchema = esquema;
       if (usaPensamientoCorto) generationConfig.thinkingConfig = { thinkingLevel: 'low' };
       let resp;
       try {
@@ -522,3 +524,6 @@ ${bloqueDocumento}`;
 };
 
 // Hecho por Sebastián Poveda y Santiago Romero. 2026
+
+// Piezas que reutiliza preguntar-tema.js (chat del estudiante sobre un tema)
+exports.util = { llamarGemini, verificarUsuario, tokenDe, json, ADMIN_EMAIL };

@@ -512,6 +512,54 @@ function apuntesHTML(t){
     <p class="meta" style="margin:6px 0 0"><span id="notaSt-${t.id}" role="status"></span></p>`;
 }
 
+/* ======================= Pregúntale a la IA =======================
+   Chat sobre UN tema: la IA responde usando solo el contenido de ese tema (netlify/functions/preguntar-tema.js).
+   Lo usan los estudiantes, con un cupo diario pequeño. La conversación no se guarda: vive mientras la página esté abierta. */
+const chatIA={};                         // temaId -> {msgs:[{r:'u'|'ia',t}], cargando, err, cupo}
+const CHAT_SUGERENCIAS=['Explícamelo más fácil','Dame un ejemplo','¿Qué es lo más importante de este tema?','Hazme una pregunta para practicar'];
+function chatHTML(t){
+  const c=chatIA[t.id]||{msgs:[]};
+  const burbujas=c.msgs.map(m=>`<div class="chatMsg ${m.r==='u'?'yo':'ia'}"><small>${m.r==='u'?'Tú':'🤖 Tutor'}</small>${esc(m.t).replace(/\n/g,'<br>')}</div>`).join('');
+  return `<p class="meta" style="margin:0 0 8px">Pregunta lo que no entiendas de este tema. La IA responde con el contenido del tema, pero puede equivocarse: compárala con tu material.${c.cupo?` Te quedan <b>${c.cupo.restantes}</b> de ${c.cupo.limite} preguntas hoy.`:''}</p>
+    <div class="chatLog" role="log" aria-live="polite" aria-label="Conversación con el tutor">${burbujas||'<p class="meta" style="margin:0">Aún no has preguntado nada. Prueba con una de estas:</p>'}${c.cargando?'<div class="chatMsg ia pensando"><small>🤖 Tutor</small>Pensando…</div>':''}</div>
+    ${!c.msgs.length&&!c.cargando?`<div class="row" style="flex-wrap:wrap;margin:8px 0 0">${CHAT_SUGERENCIAS.map(x=>`<button type="button" class="toggleChip" data-chatsug="${esc(x)}" data-id="${t.id}">${esc(x)}</button>`).join('')}</div>`:''}
+    ${c.err?`<p class="meta" role="alert" style="color:var(--no);margin:8px 0 0">⚠️ ${esc(c.err)}</p>`:''}
+    <div class="chatIn"><input class="fld" id="chatIn-${t.id}" data-chat="${t.id}" maxlength="500" autocomplete="off" aria-label="Tu pregunta sobre ${esc(t.title)}" placeholder="Escribe tu duda…" ${c.cargando?'disabled':''}>
+      <button type="button" class="pr" data-chatsend="${t.id}" ${c.cargando?'disabled':''}>Enviar</button></div>`;
+}
+async function chatEnviar(temaId,texto){
+  const t=state.temas.find(x=>x.id===temaId);if(!t||!auth.currentUser)return;
+  const c=chatIA[temaId]=chatIA[temaId]||{msgs:[]};
+  const pregunta=String(texto||'').trim().slice(0,500);
+  if(!pregunta||c.cargando)return;
+  const historial=c.msgs.slice(-6);
+  c.msgs.push({r:'u',t:pregunta});c.cargando=true;c.err='';
+  const inp=$('chatIn-'+temaId);if(inp)inp.value='';
+  render(true);
+  try{
+    const token=await auth.currentUser.getIdToken();
+    const r=await fetch('/.netlify/functions/preguntar-tema',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},
+      body:JSON.stringify({titulo:t.title||'',texto:textoTema(t),pregunta,historial})});
+    const d=await r.json().catch(()=>({}));
+    if(d.cupo)c.cupo=d.cupo;
+    if(!r.ok||!d.respuesta){c.err=d.error||('La IA no respondió (error '+r.status+').');c.msgs.pop()}
+    else c.msgs.push({r:'ia',t:d.respuesta});
+  }catch(e){console.error(e);c.err='No se pudo contactar a la IA. Revisa tu conexión.';c.msgs.pop()}
+  c.cargando=false;
+  render(true);
+  const log=document.querySelector(`[data-tema="${temaId}"] .chatLog`);if(log)log.scrollTop=log.scrollHeight;
+  if(c.err){const i=$('chatIn-'+temaId);if(i&&!i.value)i.value=pregunta}
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest&&e.target.closest('[data-chatsend],[data-chatsug]');if(!b)return;
+  if(b.dataset.chatsend){const i=$('chatIn-'+b.dataset.chatsend);chatEnviar(b.dataset.chatsend,i&&i.value)}
+  else chatEnviar(b.dataset.id,b.dataset.chatsug);
+});
+document.addEventListener('keydown',e=>{
+  const i=e.target;if(!i||!i.dataset||!i.dataset.chat||e.key!=='Enter'||e.isComposing)return;
+  e.preventDefault();chatEnviar(i.dataset.chat,i.value);
+});
+
 /* ======================= Racha con los exámenes del profesor =======================
    Cada examen del profesor que se entrega suma las preguntas respondidas a la meta diaria, igual que un quiz o un examen propio. */
 function registrarExamenProfesor(m,ex){
@@ -927,7 +975,7 @@ function anunciarNuevos(m,tipo,items){
   if(!a.base[bk]){items.forEach(x=>{a.vistos[pre+x.id]=1});a.base[bk]=1;avGuardar();return}     // primera lectura: sin avisos
   const nuevos=items.filter(x=>!a.vistos[pre+x.id]);
   if(!nuevos.length)return;
-  const ico={tema:'📖',examen:'📝',evento:'🗓️'}[tipo]||'🔔',que={tema:'tema',examen:'examen',evento:'evento'}[tipo]||'aviso';
+  const ico={tema:'📖',examen:'📝',evento:'🗓️',anuncio:'📣'}[tipo]||'🔔',que={tema:'tema',examen:'examen',evento:'evento',anuncio:'anuncio'}[tipo]||'aviso';
   nuevos.forEach(x=>{
     a.vistos[pre+x.id]=1;
     if(avisosActivos())avAgregar({tipo,materiaId:m.id,texto:ico+' Nuevo '+que+' en '+m.name+': '+x.titulo,clave:pre+x.id});
@@ -1336,6 +1384,7 @@ function viewMateriasHTML(){
     <div class="viewhead"><div><h1>Mis materias</h1><p class="sub">${pluralMv(sems.length,'carpeta','carpetas')} y ${pluralMv(todas.length,'materia','materias')}</p></div>
       <span class="row" style="margin:0"><button class="sec" data-action="semDlg">📈 Promedio por carpeta</button><button class="pr" data-action="addSemester">+ Carpeta</button></span></div>
     ${invitacionesHTML()}
+    ${guiaHTML()}
     ${repasoHoyHTML()}
     ${sems.length?'':'<div class="empty">Aún no tienes carpetas. Crea una (por ejemplo, «Primer semestre») para empezar a organizar tus materias.</div>'}
     <div class="folders">${sems.map(folderSemestreHTML).join('')}<button type="button" class="folder add" data-action="addSemester"><span><span class="fplus" aria-hidden="true">＋</span>Nueva carpeta</span></button></div>
@@ -1426,7 +1475,7 @@ function viewMateriaDetailHTML(materiaId){
   return `
     <button class="sec" data-action="${m.rol==='docente'?'backDocente':'backMaterias'}">${m.rol==='docente'?'← Espacio docente':'← '+esc(((state.semesters.find(s=>s.id===m.semesterId&&!s.oculto))||{}).name||'Mis materias')}</button>
     <div class="hero" style="--mc:${matColor(m)}"><div class="heroDot"></div><div><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1><p class="sub">${esc((state.semesters.find(x=>x.id===m.semesterId)||{}).name||'')}${state.semesters.find(x=>x.id===m.semesterId)?' · ':''}${pluralMv(state.temas.filter(x=>x.materiaId===m.id).length,'tema','temas')} · ${pluralMv(getCardsTodas(m.id).length,'tarjeta','tarjetas')}${m.semestre?` · <span class="chip">Semestre ${m.semestre}${m.curso?' · Curso '+esc(m.curso):''}</span>`:''}</p></div></div>
-    ${m.rol==='docente'?docentePanelHTML(m):m.rol==='estudiante'?estudianteDocenteBoxHTML(m)+docsOriginalesHTML(m)+examenesEstudianteHTML(m):compartidoBoxHTML(m)}
+    ${m.rol==='docente'?docentePanelHTML(m):m.rol==='estudiante'?estudianteDocenteBoxHTML(m)+anunciosEstudianteHTML(m)+docsOriginalesHTML(m)+examenesEstudianteHTML(m):compartidoBoxHTML(m)}
 
     <section class="estudiarSec">
       <div class="viewhead"><h2>🎯 Estudiar</h2></div>
@@ -1692,7 +1741,9 @@ function temaBlock(t){
   if(tab==='esquema'&&!hasSec)tab='contenido';
   const conApuntes=!esProfesor()&&(state.materias.find(x=>x.id===t.materiaId)||{}).rol==='estudiante';
   if(tab==='apuntes'&&!conApuntes)tab='contenido';
-  const tabs=[['contenido','Contenido'],...(hasSec?[['esquema','Esquema']]:[]),['tarjetas',`Tarjetas <span class="chip">${cards.length}</span>`],...(conApuntes?[['apuntes','📝 Mis apuntes']]:[])];
+  const conChat=!esProfesor();
+  if(tab==='chat'&&!conChat)tab='contenido';
+  const tabs=[['contenido','Contenido'],...(hasSec?[['esquema','Esquema']]:[]),['tarjetas',`Tarjetas <span class="chip">${cards.length}</span>`],...(conApuntes?[['apuntes','📝 Mis apuntes']]:[]),...(conChat?[['chat','🤖 Pregúntale']]:[])];
   return `<details class="s" data-tema="${t.id}" ${ui.open[t.id]?'open':''}>
     <summary><span class="temaHead"><span class="tt">📝 ${esc(t.title)||'(tema sin título)'}</span><span class="chips">${esDocenteMat(t.materiaId)?`<span class="chip ${t.publicado?'chipOk':''}">${t.publicado?'✅ Publicado':'📝 Borrador'}</span>`:''}${t.by&&sharedMateria(t.materiaId)?`<span class="chip" title="${esc(t.fuente||'')}">👤 ${esc(t.by)}</span>`:''}${hasSec?`<span class="chip">${t.secciones.length} sección${t.secciones.length==1?'':'es'}</span>`:''}<span class="chip">${cards.length} tarjeta${cards.length==1?'':'s'}</span></span></span>
       ${t.archivo?`<button class="icon-btn" data-action="descargarOriginal" data-id="${t.id}" title="Descargar documento original" aria-label="Descargar documento original">⬇️</button>`:''}${esDocenteMat(t.materiaId)?`<button class="icon-btn" data-action="togglePublicar" data-id="${t.id}" title="${t.publicado?'Pasar a borrador':'Publicar a los estudiantes'}">${t.publicado?'📝':'✅'}</button>`:''}<button class="icon-btn" data-action="delTema" data-id="${t.id}" title="Eliminar tema">🗑️</button>
@@ -1718,6 +1769,7 @@ function temaBlock(t){
         <button class="sec" data-action="addCard" data-tema="${t.id}" data-mat="${t.materiaId}">+ Agregar tarjeta</button>
       </div>
       ${conApuntes?`<div class="tp" data-panel="apuntes" ${tab==='apuntes'?'':'hidden'}>${apuntesHTML(t)}</div>`:''}
+      ${conChat?`<div class="tp" data-panel="chat" ${tab==='chat'?'':'hidden'}>${chatHTML(t)}</div>`:''}
     </div>
   </details>`;
 }
@@ -1911,11 +1963,14 @@ const LEITNER=[0,1,2,4,8,16];
 const hoyStr=()=>fechaLocal(new Date());
 function sumarDias(f,n){const d=new Date(f+'T00:00');d.setDate(d.getDate()+n);return fechaLocal(d)}
 function tarjetaPendiente(c,hoy){return !c.due||c.due<=(hoy||hoyStr())}
-function repasarTarjeta(c,acierto){
+/* calidad (solo si acertó): 'dificil' = me costó (no sube de caja y vuelve pronto), 'bien' = normal, 'facil' = salta una caja */
+function repasarTarjeta(c,acierto,calidad){
   const hoy=hoyStr(),pendiente=tarjetaPendiente(c,hoy);
   c.lastOk=!!acierto;c.last=hoy;
   if(!acierto){c.box=1;c.due=sumarDias(hoy,1);c.fails=(c.fails||0)+1;return}
-  if(pendiente){c.box=Math.min(5,(c.box||0)+1);c.due=sumarDias(hoy,LEITNER[c.box])}
+  if(!pendiente)return;
+  if(calidad==='dificil'){c.box=Math.max(1,c.box||0);c.due=sumarDias(hoy,Math.max(1,Math.round(LEITNER[c.box]/2)));return}
+  c.box=Math.min(5,(c.box||0)+(calidad==='facil'?2:1));c.due=sumarDias(hoy,LEITNER[c.box]);
 }
 /* Sesión de hoy: primero las vencidas (las más atrasadas antes) y luego unas pocas nuevas, hasta 20 en total */
 function sesionHoy(materiaId,max){
@@ -2094,9 +2149,11 @@ function toolFlashcardsHTML(titulo){
     <div class="fcInner"><div class="fcFace fcFront">${esc(c.front)}</div><div class="fcFace fcBack">${esc(c.back)}</div></div>
   </div>
   <p class="meta" style="text-align:center">Tocá la tarjeta para voltear</p>
-  <div class="row" style="justify-content:center">
-    <button class="sec" data-action="cardAnswer" data-know="0">😕 Repasar</button>
-    <button class="pr" data-action="cardAnswer" data-know="1">😊 La sé</button>
+  <div class="row fcResp" style="justify-content:center;flex-wrap:wrap" role="group" aria-label="¿Qué tan bien te la sabías?">
+    <button class="sec" data-action="cardAnswer" data-know="0" title="Vuelve mañana">😕 No la sé</button>
+    <button class="sec" data-action="cardAnswer" data-know="1" data-cal="dificil" title="Acertaste, pero vuelve pronto">🤔 Me costó</button>
+    <button class="pr" data-action="cardAnswer" data-know="1" data-cal="bien" title="Sube una caja">😊 La sé</button>
+    <button class="sec" data-action="cardAnswer" data-know="1" data-cal="facil" title="Salta una caja: tarda más en volver">😎 Fácil</button>
   </div>`;
 }
 
@@ -2583,7 +2640,7 @@ document.addEventListener('click',async e=>{
     const know=b.dataset.know==='1';
     const c=toolState.cards[toolState.idx];
     const real=state.cards.find(x=>x.id===c.id);
-    if(real){real.known=know;repasarTarjeta(real,know);persist();avisarLogros(evaluarLogros());}
+    if(real){real.known=know;repasarTarjeta(real,know,b.dataset.cal||'bien');persist();avisarLogros(evaluarLogros());}
     toolState.seen++;if(know)toolState.known++;
     toolState.idx++;toolState.flipped=false;
     render();
@@ -3719,9 +3776,44 @@ function docenteCard(m){
 function viewDocenteHTML(){
   const mats=state.materias.filter(m=>m.rol==='docente');
   return `<div class="viewhead"><h1>👩‍🏫 Espacio docente</h1><button class="pr" data-action="createDocente">+ Crear materia</button></div>
+    ${guiaHTML()}
     ${mats.length?`<div class="grid">${mats.map(docenteCard).join('')}</div>`
     :`<div class="empty">Aquí creas tus materias como docente: subes un PDF, la IA genera el tema y las tarjetas, tú los revisas y los publicas, e invitas a tus estudiantes por correo. Ellos las ven en su cuaderno, en solo lectura.</div>`}`;
 }
+/* ---------- Guía de primeros pasos ----------
+   Una lista corta según el rol, que se marca sola a medida que la persona usa la app. Desaparece al completarla
+   o al pulsar "Ocultar" (se guarda en el perfil, así no vuelve a salir en otro equipo). */
+function pasosGuia(){
+  if(esProfesor()){
+    const mats=state.materias.filter(m=>m.rol==='docente'),ids=new Set(mats.map(m=>m.id));
+    const temas=state.temas.filter(t=>ids.has(t.materiaId));
+    return[
+      {ok:mats.length>0,t:'Crea tu primera materia',d:'Con el botón «+ Crear materia» de arriba.'},
+      {ok:temas.length>0,t:'Sube un PDF y deja que la IA arme el tema',d:'Dentro de la materia, en «Contenido». La IA hace el resumen, el esquema y las tarjetas.'},
+      {ok:temas.some(t=>t.publicado),t:'Revisa y publica los temas',d:'Tus estudiantes solo ven los temas publicados (botón ✅ en cada tema).'},
+      {ok:mats.some(m=>nEstudiantes(m)>0||(invitMap[m.sharedId]||[]).length>0),t:'Invita a tus estudiantes',d:'En la pestaña «Estudiantes», con sus correos.'},
+      {ok:mats.some(m=>Object.keys(exMap[m.sharedId]||{}).length>0),t:'Crea tu primer examen',d:'En «Exámenes»: eliges los temas, revisas las preguntas y lo publicas.'}
+    ];
+  }
+  return[
+    {ok:state.materias.length>0,t:'Entra a la materia de tu profesor',d:'Acepta su invitación (te llega aquí arriba) o únete con el código que te dé.',accion:'joinSharedPrompt',btn:'🔗 Unirme con código'},
+    {ok:state.cards.some(c=>c.last),t:'Repasa tus primeras tarjetas',d:'Abre una materia y entra a «Flashcards». Auren te recordará cuándo repasar cada una.'},
+    {ok:(state.attempts||[]).length>0,t:'Pon a prueba lo que sabes',d:'Haz un quiz o un examen de práctica: si fallas, verás por qué.'},
+    {ok:(state.progress.days||[]).length>0,t:'Cumple tu primer día de racha',d:'Responde '+META_RACHA+' preguntas en un día para encender la racha 🔥.'}
+  ];
+}
+function guiaHTML(){
+  if(state.profile.guiaOculta)return '';
+  const pasos=pasosGuia(),hechos=pasos.filter(p=>p.ok).length;
+  if(hechos===pasos.length)return '';
+  const sig=pasos.findIndex(p=>!p.ok);
+  return `<div class="card guia" style="margin-bottom:14px">
+    <div class="row" style="justify-content:space-between;margin-top:0;align-items:center"><b>👋 Primeros pasos en Auren</b><span class="row" style="margin:0;gap:8px"><span class="chip">${hechos}/${pasos.length}</span><button type="button" class="sec sm" data-action="guiaOcultar">Ocultar</button></span></div>
+    <div class="bar mini" style="margin:8px 0 4px"><i style="width:${Math.round(hechos/pasos.length*100)}%"></i></div>
+    <ol class="guiaPasos">${pasos.map((p,i)=>`<li class="${p.ok?'ok':i===sig?'sig':''}"><span class="gIco" aria-hidden="true">${p.ok?'✅':i===sig?'👉':'○'}</span><div><b>${esc(p.t)}</b>${p.ok?'<span class="sr">(hecho)</span>':''}${i===sig?`<div class="meta" style="margin:2px 0 0">${esc(p.d)}</div>${p.accion?`<button type="button" class="sec sm" style="margin-top:6px" data-action="${p.accion}">${p.btn}</button>`:''}`:''}</div></li>`).join('')}</ol>
+  </div>`;
+}
+
 /* En materias de docente, el estudiante no puede editar el contenido compartido */
 function aplicarSoloLectura(){
   const m=route.view==='materiaDetail'?state.materias.find(x=>x.id===route.materiaId):null;
@@ -4318,7 +4410,7 @@ async function pedirIA(texto,materiaNombre,statusEl,pdf){
    La nota "oficial" la calcula el panel del docente a partir de esas respuestas inmutables, así
    que un estudiante no puede inventarse su calificación.
    ====================================================================== */
-const exMap={},clMap={},inMap={};      // sid -> datos en vivo
+const exMap={},clMap={},inMap={},comMap={},anMap={};      // sid -> datos en vivo
 const pendClave=new Set();
 let docTab='contenido',docTabMat=null;
 let exBuf=null,exGuardarT=null;        // examen que el docente está editando
@@ -4394,9 +4486,66 @@ function escucharExamenes(m){
   if(prof)u.push(base.collection('claves').onSnapshot(snap=>{
     clMap[sid]={};snap.docs.forEach(d=>{clMap[sid][d.id]={id:d.id,...d.data()}});renderSeguro();
   },aviso('claves')));
+  // Comentarios del docente sobre cada entrega (el estudiante solo ve los suyos)
+  const colCom=base.collection('comentarios');
+  u.push((prof?colCom:colCom.where('uid','==',currentUid)).onSnapshot(snap=>{
+    comMap[sid]={};snap.docs.forEach(d=>{comMap[sid][d.id]={id:d.id,...d.data()}});renderSeguro();
+  },aviso('comentarios')));
+  // Anuncios de la materia (los escribe el docente; todos los miembros los leen)
+  u.push(base.collection('anuncios').onSnapshot(snap=>{
+    anMap[sid]={};snap.docs.forEach(d=>{anMap[sid][d.id]={id:d.id,...d.data()}});renderSeguro();
+    if(!prof)anunciarNuevos(m,'anuncio',snap.docs.map(d=>({id:d.id,titulo:String(d.data().texto||'').slice(0,60)})));
+  },aviso('anuncios')));
   return u;
 }
-function limpiarExamenes(sid){delete exMap[sid];delete clMap[sid];delete inMap[sid];delete iniMap[sid];delete evMap[sid]}
+function limpiarExamenes(sid){delete exMap[sid];delete clMap[sid];delete inMap[sid];delete iniMap[sid];delete evMap[sid];delete comMap[sid];delete anMap[sid]}
+
+/* ======================= Comentarios del docente y anuncios =======================
+   comentarios/{examId_uid}: lo que el docente le escribe a un estudiante sobre su entrega (solo ellos dos lo leen).
+   anuncios/{id}: mensajes del docente para toda la materia. */
+const COMENTARIO_MAX=1000,ANUNCIO_MAX=1000;
+function comentarioDe(m,exId,u){return (comMap[m.sharedId]||{})[exId+'_'+u]||null}
+function anunciosDe(m){return Object.values(anMap[m.sharedId]||{}).sort((a,b)=>ms(b.creado)-ms(a.creado))}
+async function guardarComentario(m,exId,u){
+  const el=$('comTx-'+u);if(!el)return;
+  const texto=el.value.trim().slice(0,COMENTARIO_MAX),ref=baseDe(m).collection('comentarios').doc(exId+'_'+u);
+  try{
+    if(texto)await ref.set({examId:exId,uid:u,texto,actualizado:firebase.firestore.FieldValue.serverTimestamp()});
+    else await ref.delete();
+    toast(texto?'💬 Comentario guardado':'Comentario borrado');
+  }catch(e){console.error(e);UI.alerta('No se pudo guardar el comentario'+detalleError(e)+'. ¿Publicaste las reglas nuevas de Firestore?')}
+}
+async function publicarAnuncio(m){
+  const el=$('anuncioTx');if(!el)return;
+  const texto=el.value.trim().slice(0,ANUNCIO_MAX);if(!texto)return;
+  try{
+    await baseDe(m).collection('anuncios').add({texto,by:miNombre(),creado:firebase.firestore.FieldValue.serverTimestamp()});
+    el.value='';toast('📣 Anuncio publicado');
+  }catch(e){console.error(e);UI.alerta('No se pudo publicar el anuncio'+detalleError(e)+'. ¿Publicaste las reglas nuevas de Firestore?')}
+}
+async function borrarAnuncio(m,id){
+  if(!await UI.confirmar('¿Borrar este anuncio? Tus estudiantes dejarán de verlo.'))return;
+  try{await baseDe(m).collection('anuncios').doc(id).delete()}catch(e){console.error(e);UI.alerta('No se pudo borrar'+detalleError(e)+'.')}
+}
+function anuncioHTML(a,borrable,m){
+  return `<div class="anuncio"><div class="row" style="justify-content:space-between;margin:0;align-items:flex-start"><span class="meta" style="margin:0">${a.by?esc(a.by)+' · ':''}${ms(a.creado)?esc(fmtFechaHora(ms(a.creado))):'ahora'}</span>${borrable?`<button class="icon-btn" data-action="anuncioBorrar" data-id="${m.id}" data-an="${a.id}" title="Borrar anuncio" aria-label="Borrar anuncio">🗑️</button>`:''}</div>
+    <p style="margin:4px 0 0;white-space:pre-wrap">${esc(a.texto)}</p></div>`;
+}
+function docenteAnunciosHTML(m){
+  const ans=anunciosDe(m);
+  return `<div class="card">
+    <h3 style="margin-top:0">📣 Nuevo anuncio</h3>
+    <p class="meta" style="margin:0 0 8px">Lo verán todos los estudiantes de la materia al entrar, y les llega como aviso en la campana 🔔.</p>
+    <textarea class="fld" id="anuncioTx" rows="3" maxlength="${ANUNCIO_MAX}" placeholder="Por ejemplo: mañana la clase es en el laboratorio 3." aria-label="Texto del anuncio"></textarea>
+    <div class="row"><button class="pr" data-action="anuncioPublicar" data-id="${m.id}">Publicar anuncio</button></div>
+  </div>
+  ${ans.length?ans.map(a=>`<div class="card" style="margin-top:8px">${anuncioHTML(a,true,m)}</div>`).join(''):'<div class="empty">Todavía no has publicado anuncios.</div>'}`;
+}
+function anunciosEstudianteHTML(m){
+  const ans=anunciosDe(m).slice(0,3);
+  if(!ans.length)return '';
+  return `<div class="card shareBox" style="margin-top:12px"><b style="font-size:.9em">📣 Anuncios de tu docente</b>${ans.map(a=>anuncioHTML(a,false,m)).join('')}</div>`;
+}
 
 /* ======================= EVENTOS DEL DOCENTE EN EL CALENDARIO ======================= */
 /* Viven en temarios/{sid}/eventos. El docente (dueño) escribe; los estudiantes de la materia solo leen. */
@@ -4544,7 +4693,7 @@ async function asegurarClave(m,exId){
 
 /* ======================= DOCENTE: pestañas de la materia ======================= */
 function docenteTabsHTML(m){
-  const tabs=[['contenido','📚 Contenido'],['examenes','📝 Exámenes'],['eventos','🗓️ Calendario'],['estudiantes','👥 Estudiantes']];
+  const tabs=[['contenido','📚 Contenido'],['examenes','📝 Exámenes'],['anuncios','📣 Anuncios'],['eventos','🗓️ Calendario'],['estudiantes','👥 Estudiantes']];
   return `<div class="tabsT docTabs" style="margin:14px 0">${tabs.map(([k,t])=>`<button type="button" data-action="docTab" data-tab="${k}" class="${docTab===k?'on':''}">${t}</button>`).join('')}</div>`;
 }
 function docentePanelHTML(m){
@@ -4574,7 +4723,7 @@ function viewDocenteTabHTML(m){
   return `<button class="sec" data-action="backDocente">← Mis materias</button>
     <div class="viewhead" style="margin-top:14px"><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1></div>
     ${docenteTabsHTML(m)}
-    ${docTab==='examenes'?docenteExamenesHTML(m):docTab==='eventos'?docenteEventosHTML(m):docenteEstudiantesHTML(m)}`;
+    ${docTab==='examenes'?docenteExamenesHTML(m):docTab==='anuncios'?docenteAnunciosHTML(m):docTab==='eventos'?docenteEventosHTML(m):docenteEstudiantesHTML(m)}`;
 }
 
 /* ---------- Seguimiento del grupo: junta todos los exámenes publicados de la materia ----------
@@ -4897,7 +5046,9 @@ function detalleEstudianteHTML(f,ex){
         const tag=esC&&esE?'✅ Su respuesta · correcta':esC?'✔ Respuesta correcta':esE?'❌ Su respuesta':'';
         return `<li class="${esC?'opC':esE?'opE':''}">${esc(o)}${tag?` <small>${tag}</small>`:''}</li>`}).join('')}</ul>
       ${d.elegido===undefined?'<div class="meta" style="margin:2px 0 0">Sin responder</div>':''}</div>`).join(''):'<p class="meta">No hay preguntas en este filtro.</p>'}
-    <div class="row"><button class="sec" data-action="exRepetir" data-u="${f.uid}">↩️ Permitir que lo repita</button></div></div>`;
+    <label class="lbl" for="comTx-${f.uid}">💬 Comentario para ${esc(f.nombre)} (solo lo ve este estudiante)</label>
+    <textarea class="fld" id="comTx-${f.uid}" rows="2" maxlength="${COMENTARIO_MAX}" placeholder="Por ejemplo: repasa el tema 2, confundiste los conceptos de…">${esc((comentarioDe(materiaRuta(),ex.id,f.uid)||{}).texto||'')}</textarea>
+    <div class="row"><button class="sec" data-action="comGuardar" data-u="${f.uid}">💬 Guardar comentario</button><button class="sec" data-action="exRepetir" data-u="${f.uid}">↩️ Permitir que lo repita</button></div></div>`;
 }
 function viewDocResultadosHTML(){
   const m=materiaRuta(),ex=m&&(exMap[m.sharedId]||{})[route.examId];
@@ -5240,6 +5391,7 @@ function viewExamenDocHTML(){
         <div class="ringTxt"><b class="countUp" data-to="${r.ok}">${r.ok}</b><span>/ ${r.total}</span></div></div>
       <p class="resMsg">${msg}</p>
       <p class="meta">Nota: <b>${fmtN(r.nota)} / ${r.escala}</b> · ${r.pct}%</p>
+      ${(c=>c&&c.texto?`<div class="card shareBox" style="text-align:left;margin:10px 0"><b style="font-size:.9em">💬 Comentario de tu docente</b><p style="margin:4px 0 0;white-space:pre-wrap">${esc(c.texto)}</p></div>`:'')(comentarioDe(m,ex.id,currentUid))}
       ${exTom.racha?`<p class="meta" id="exRacha">🔥 Este examen sumó <b>${exTom.racha.aporte}</b> pregunta${exTom.racha.aporte==1?'':'s'} a tu racha de hoy (${exTom.racha.hoyRacha}/${META_RACHA})${exTom.racha.diaNuevo?' · ¡día de racha cumplido!':''}${exTom.racha.extra?' · '+exTom.racha.extra+' de práctica extra':''}.</p>`:''}
       <div class="resList">${r.det.map((d,i)=>`<div class="resRow ${d.acierto?'bien':'mal'}" style="--i:${Math.min(i,14)};margin-top:10px"><b>${i+1}. ${esc(d.q.enunciado)}</b>
         <div class="meta" style="margin:2px 0 0">${d.acierto?'✅':'❌'} Tu respuesta: <b>${esc(textoRespuesta(d.q,d.elegido)||'(sin responder)')}</b>${d.acierto?'':' · Correcta: <b>'+esc(textoRespuesta(d.q,d.correcta))+'</b>'}</div>${d.acierto?'':explicacionHTML(d.exp)}</div>`).join('')}</div>
@@ -5396,6 +5548,10 @@ document.addEventListener('click',async e=>{
       catch(err){console.error(err);UI.alerta('No se pudo quitar'+detalleError(err)+'.')}
     }
   }
+  else if(a==='guiaOcultar')mutate(s=>{s.profile.guiaOculta=true});
+  else if(a==='anuncioPublicar'&&m)publicarAnuncio(m);
+  else if(a==='anuncioBorrar'&&m)borrarAnuncio(m,b.dataset.an);
+  else if(a==='comGuardar'){const mm=materiaRuta();if(mm&&route.examId)guardarComentario(mm,route.examId,b.dataset.u)}
   else if(a==='segToggle'){segAbierto=!segAbierto;render(true)}
   else if(a==='exAddQ'&&exBuf){
     exBuf.preguntas.push({id:uid(),enunciado:'',opciones:['','','',''],correcta:0,tipo:'mc',dif:'media',temaId:'',temaTitulo:''});
