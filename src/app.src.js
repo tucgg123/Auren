@@ -606,6 +606,7 @@ async function borrarMiCuenta(){
     }
     await borrarColeccionPropia('anotaciones/'+uidViejo+'/items');
     await borrarColeccionPropia('bancoPreguntas/'+uidViejo+'/items');
+    await borrarColeccionPropia('users/'+uidViejo+'/materias');
     await db.collection('users').doc(uidViejo).delete();
     await db.collection('usuarios').doc(uidViejo).delete();
     await u.delete();
@@ -644,7 +645,7 @@ function syncOk(){sync.fallo='';pintarBanner()}
 function revisarTamano(bytes){
   const pct=Math.round(bytes/FIRESTORE_MAX*100);
   sync.tamAlto=pct>=80;
-  sync.aviso=sync.tamAlto?'💾 Tu cuaderno ocupa el '+pct+' % del espacio que permite la nube. Si se llena dejará de sincronizarse: libera espacio.':'';
+  sync.aviso=sync.tamAlto?'💾 Una de tus materias ocupa el '+pct+' % del espacio que permite la nube. Si se llena dejará de sincronizarse: libera espacio.':'';
 }
 async function liberarEspacio(){
   const lim=Date.now()-120*864e5,viejos=(state.attempts||[]).filter(a=>a.date<lim).length;
@@ -655,10 +656,10 @@ async function reintentarSync(){
   if(!currentUid)return;
   if(sync.soloLocal){
     try{
-      const doc=await db.collection('users').doc(currentUid).get();
-      if(doc.exists&&doc.data().data){
+      const nube=await leerNube(currentUid);
+      if(nube){
         if(await UI.confirmar('Se encontró tu cuaderno guardado en la nube.\n\nAceptar = cargar la versión de la nube (se descartan los cambios hechos sin conexión en este dispositivo).\nCancelar = conservar lo de este dispositivo y reemplazar la nube.')){
-          state=JSON.parse(doc.data().data);normalizeState();saveLocal();applyTheme();updateThemeBtn();render();startShared();
+          state=nube;normalizeState();saveLocal();applyTheme();updateThemeBtn();render();startShared();
         }
       }
       sync.soloLocal=false;sync.fallo='';
@@ -669,7 +670,54 @@ async function reintentarSync(){
 window.addEventListener('online',()=>{sync.offline=false;pintarBanner();pushCloudNow()});
 window.addEventListener('offline',()=>{sync.offline=true;pintarBanner()});
 
-let cloudTimer=null;
+/* ---------- Nube por partes ----------
+   Antes todo el cuaderno era UN documento (users/{uid}) que se reemplazaba entero: si se estudiaba en dos equipos,
+   el último en guardar borraba lo del otro, y Firestore no deja pasar de 1 MB por documento.
+   Ahora:  users/{uid}                 -> lo general (perfil, semestres, calendario, racha...) en el campo "global"
+           users/{uid}/materias/{id}   -> cada materia con sus temas, cortes, tarjetas e intentos
+   Solo se sube lo que cambió desde la última vez, así un equipo no pisa las materias que tocó el otro.
+   Las cuentas antiguas (campo "data" con todo junto) se pasan solas al formato nuevo la primera vez que se guarda. */
+const PARTES_MATERIA=['temas','cortes','cards','attempts'];
+const nubeSubido=new Map();          // id de materia (o '__raiz') -> JSON que ya está en la nube
+function partirEstado(s){
+  const ids=new Set((s.materias||[]).map(m=>m.id)),mats={},raiz={};
+  (s.materias||[]).forEach(m=>{mats[m.id]={materia:m}});
+  Object.keys(s).forEach(k=>{
+    if(k==='materias')return;
+    if(PARTES_MATERIA.includes(k)&&Array.isArray(s[k])){
+      raiz[k]=[];
+      s[k].forEach(x=>{if(x&&ids.has(x.materiaId))(mats[x.materiaId][k]=mats[x.materiaId][k]||[]).push(x);else raiz[k].push(x)});
+      return;
+    }
+    raiz[k]=s[k];
+  });
+  raiz.orden=(s.materias||[]).map(m=>m.id);
+  return{raiz,mats};
+}
+function unirEstado(raiz,partes){
+  const s=Object.assign({},raiz),orden=s.orden||[];delete s.orden;
+  partes=partes.slice().sort((a,b)=>{const i=orden.indexOf(a.materia.id),j=orden.indexOf(b.materia.id);return(i<0?1e9:i)-(j<0?1e9:j)});
+  s.materias=partes.map(p=>p.materia);
+  PARTES_MATERIA.forEach(k=>{s[k]=(s[k]||[]).slice();partes.forEach(p=>{if(Array.isArray(p[k]))s[k].push(...p[k])})});
+  return s;
+}
+/* Lee el cuaderno de la nube. Devuelve null si la cuenta todavía no tiene nada guardado. */
+async function leerNube(u){
+  const ref=db.collection('users').doc(u),doc=await ref.get();
+  const d=doc.exists?doc.data():null;
+  if(d&&d.global){
+    const snap=await ref.collection('materias').get();
+    nubeSubido.clear();nubeSubido.set('__raiz',d.global);
+    const partes=[];
+    snap.docs.forEach(x=>{try{const p=JSON.parse(x.data().data);if(p&&p.materia){partes.push(p);nubeSubido.set(x.id,x.data().data)}}catch(e){console.warn('Materia ilegible en la nube:',x.id,e)}});
+    return unirEstado(JSON.parse(d.global),partes);
+  }
+  nubeSubido.clear();
+  if(d&&d.data)return JSON.parse(d.data);          // formato antiguo: todo en un solo documento
+  return null;
+}
+
+let cloudTimer=null,subiendo=false,subirOtraVez=false;
 function scheduleCloud(){
   if(!currentUid)return;
   clearTimeout(cloudTimer);
@@ -677,24 +725,46 @@ function scheduleCloud(){
 }
 async function pushCloudNow(){
   if(!currentUid)return;
+  if(subiendo){subirOtraVez=true;return}
   pushShared();
   if(sync.soloLocal){sync.fallo='⚠️ No se pudo leer tu cuaderno de la nube al iniciar. Por seguridad no se sube nada para no pisarlo con datos viejos. Tus cambios siguen en este dispositivo.';pintarBanner();return}
+  subiendo=true;
+  const uidAhora=currentUid;
   try{
-    const data=JSON.stringify(state);
-    revisarTamano(new Blob([data]).size);
-    await db.collection('users').doc(currentUid).set({
-      data,
-      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    const{raiz,mats}=partirEstado(state),ref=db.collection('users').doc(uidAhora);
+    const ahora=()=>firebase.firestore.FieldValue.serverTimestamp();
+    let mayor=0;const tareas=[];
+    Object.keys(mats).forEach(id=>{
+      const data=JSON.stringify(mats[id]);
+      mayor=Math.max(mayor,new Blob([data]).size);
+      if(nubeSubido.get(id)!==data)tareas.push(ref.collection('materias').doc(id).set({data,updatedAt:ahora()}).then(()=>nubeSubido.set(id,data)));
     });
+    [...nubeSubido.keys()].filter(id=>id!=='__raiz'&&!mats[id]).forEach(id=>{
+      tareas.push(ref.collection('materias').doc(id).delete().then(()=>nubeSubido.delete(id)));
+    });
+    const global=JSON.stringify(raiz);
+    mayor=Math.max(mayor,new Blob([global]).size);
+    revisarTamano(mayor);
+    await Promise.all(tareas);
+    // La raíz va al final: si algo de arriba falla, no queda apuntando a materias a medio subir
+    if(nubeSubido.get('__raiz')!==global){
+      await ref.set({global,v:2,updatedAt:ahora()});      // set() sin merge: borra el campo "data" del formato antiguo
+      nubeSubido.set('__raiz',global);
+    }
     syncOk();
   }catch(e){console.error('No se pudo sincronizar con la nube:',e);syncFallo(e)}
+  finally{
+    subiendo=false;
+    if(subirOtraVez&&currentUid===uidAhora){subirOtraVez=false;pushCloudNow()}
+  }
 }
 async function hydrateFromCloud(u){
   currentUid=u;
   try{
-    const doc=await db.collection('users').doc(u).get();
-    if(doc.exists && doc.data().data){
-      state=JSON.parse(doc.data().data);
+    const nube=await leerNube(u);
+    if(nube){
+      state=nube;
+      if(!nubeSubido.size){normalizeState();saveLocal();await pushCloudNow();return}   // cuenta antigua: se pasa al formato nuevo
     }else{
       state=loadLocal()||defaultState();
       await pushCloudNow();
@@ -1679,6 +1749,7 @@ function cardRow(c){
   return `<div class="cardRow" data-card="${c.id}">
     <span class="cl">Frente</span><textarea class="fld sm cf" rows="1" data-action="editCardFront" data-id="${c.id}" placeholder="Frente (término / pregunta)">${esc(c.front)}</textarea>
     <span class="cl">Reverso</span><textarea class="fld sm cb" rows="1" data-action="editCardBack" data-id="${c.id}" placeholder="Reverso (definición / respuesta)">${esc(c.back)}</textarea>
+    <span class="cl">Por qué</span><textarea class="fld sm ce" rows="1" data-action="editCardExp" data-id="${c.id}" placeholder="Explicación (opcional): se muestra cuando alguien falla esta tarjeta" maxlength="400">${esc(c.exp||'')}</textarea>
     <button class="icon-btn" data-action="delCard" data-id="${c.id}" title="Eliminar tarjeta">🗑️</button>
   </div>`;
 }
@@ -2098,7 +2169,7 @@ function toolQuizHTML(isExam){
     <p class="resMsg">${msg}</p>
     <p class="meta">Resultado: <b>${score} / ${questions.length}</b> · ${pct}%${(state.cortes.find(x=>x.id===toolState.corteId)||{}).name?' · '+esc(state.cortes.find(x=>x.id===toolState.corteId).name):''}</p>
     ${premiosHTML()}
-    ${isExam?`<div class="resList">${questions.map((q,i)=>`<p class="meta resRow ${esAcierto(q)?'bien':'mal'}" style="--i:${Math.min(i,14)}">${i+1}. ${esc(q.enun)}${q.tipo==='vf'?' «'+esc(q.afirm)+'»':''} — ${esAcierto(q)?'✅':'❌ correcta: '+esc(q.correcta)}</p>`).join('')}</div>`:''}
+    ${isExam?`<div class="resList">${questions.map((q,i)=>`<p class="meta resRow ${esAcierto(q)?'bien':'mal'}" style="--i:${Math.min(i,14)}">${i+1}. ${esc(q.enun)}${q.tipo==='vf'?' «'+esc(q.afirm)+'»':''} — ${esAcierto(q)?'✅':'❌ correcta: '+esc(q.correcta)}${esAcierto(q)?'':explicacionHTML(q.card&&q.card.exp)}</p>`).join('')}</div>`:''}
     <button class="pr" data-action="redoTool">Repetir</button></div>`;
   }
   const q=questions[idx];
@@ -2646,6 +2717,10 @@ document.addEventListener('input',e=>{
     const c=state.cards.find(x=>x.id===id);if(!c)return;
     c.back=e.target.value;persist();
   }
+  else if(a==='editCardExp'){
+    const c=state.cards.find(x=>x.id===id);if(!c)return;
+    const v=e.target.value.slice(0,400);if(v.trim())c.exp=v;else delete c.exp;persist();
+  }
   else if(a==='editMateriaRefs'){
     const m=state.materias.find(x=>x.id===id);if(!m)return;
     m.refs=e.target.value;persist();
@@ -2705,7 +2780,7 @@ document.addEventListener('input',e=>{if(e.target.matches&&e.target.matches('.se
 /* ================= IA: SUBIR PDF/PPTX Y GENERAR TEMA + TARJETAS ================= */
 /* Caché de resultados de IA: si subes otra vez el mismo archivo, se reutiliza el resultado
    y NO se gasta una petición del límite diario de Gemini (que cuenta peticiones, no tokens). */
-const IA_CACHE_VER='v7';   // súbela cada vez que cambies las instrucciones de la IA, para no reutilizar resultados viejos
+const IA_CACHE_VER='v8';   // súbela cada vez que cambies las instrucciones de la IA, para no reutilizar resultados viejos
 const IA_LIMITE_DIARIO=20;   // archivos (PDF o PPTX) por persona y por día. Debe coincidir con LIMITE_DIARIO en netlify/functions/generar-tema.js
 const IA_MAX_CHARS=60000;   // texto máximo que se manda a la IA (antes 20 000: el resto se ignoraba en silencio)
 const IA_CACHE_MAX=15;     // cuántos resultados se recuerdan en este navegador
@@ -3003,6 +3078,7 @@ document.addEventListener('change',async e=>{
           if(String(t.falsa||'').trim())c.falsa=String(t.falsa).trim();    // afirmación falsa (verdadero/falso)
           if(String(t.hueco_oracion||'').includes('____')&&String(t.hueco_respuesta||'').trim())c.hueco={o:String(t.hueco_oracion).trim(),r:String(t.hueco_respuesta).trim()};
           if(['facil','media','dificil'].includes(t.dificultad))c.dif=t.dificultad;                  // qué tan difícil es, según la IA
+          if(String(t.explicacion||'').trim())c.exp=String(t.explicacion).trim().slice(0,400);       // por qué la respuesta es esa (se muestra al fallar)
           s.cards.push(c);
         }
       });
@@ -3072,7 +3148,7 @@ function contenidoTema(t){
     archivo:tieneOriginal(t.archivo)?t.archivo:null,
     medios:Array.isArray(t.medios)?t.medios:[],
     ...(esDocenteMat(t.materiaId)?{corte:((state.cortes.find(c=>c.id===t.corteId)||{}).name||'')}:{}),
-    cards:state.cards.filter(c=>c.temaId===t.id).map(c=>{const o={id:c.id,front:c.front||'',back:c.back||''};if(Array.isArray(c.dist)&&c.dist.length)o.dist=c.dist;if(c.falsa)o.falsa=c.falsa;if(c.hueco)o.hueco=c.hueco;if(c.dif)o.dif=c.dif;return o})
+    cards:state.cards.filter(c=>c.temaId===t.id).map(c=>{const o={id:c.id,front:c.front||'',back:c.back||''};if(Array.isArray(c.dist)&&c.dist.length)o.dist=c.dist;if(c.falsa)o.falsa=c.falsa;if(c.hueco)o.hueco=c.hueco;if(c.dif)o.dif=c.dif;if(c.exp)o.exp=c.exp;return o})
   };
 }
 
@@ -3148,7 +3224,7 @@ function aplicarTemaRemoto(m,id,d){
   (d.cards||[]).forEach(c=>{
     const v=viejas.get(c.id)||{},n={id:c.id,temaId:id,materiaId:m.id,front:c.front||'',back:c.back||'',known:v.known===undefined?null:v.known};
     ['box','due','last','lastOk','fails'].forEach(k=>{if(v[k]!==undefined)n[k]=v[k]});      // mi progreso de repaso es solo mío: no se pierde cuando el profesor cambia el tema
-    if(Array.isArray(c.dist)&&c.dist.length)n.dist=c.dist;if(c.falsa)n.falsa=c.falsa;if(c.hueco)n.hueco=c.hueco;if(c.dif)n.dif=c.dif;
+    if(Array.isArray(c.dist)&&c.dist.length)n.dist=c.dist;if(c.falsa)n.falsa=c.falsa;if(c.hueco)n.hueco=c.hueco;if(c.dif)n.dif=c.dif;if(c.exp)n.exp=c.exp;
     state.cards.push(n);
   });
   sharedLast[id]={sid:m.sharedId,k:JSON.stringify(contenidoTema(t))};
@@ -3982,7 +4058,12 @@ function reducido(){
 function feedbackHTML(acierto,q,idx){
   return acierto
     ?`<div class="fb fbOk" role="status">🎉 ${FRASES_OK[idx%FRASES_OK.length]}</div>`
-    :`<div class="fb fbNo" role="status">😕 ${FRASES_NO[idx%FRASES_NO.length]}<span>La correcta: <b>${esc(q.correcta)}</b></span></div>`;
+    :`<div class="fb fbNo" role="status">😕 ${FRASES_NO[idx%FRASES_NO.length]}<span>La correcta: <b>${esc(q.correcta)}</b></span>${explicacionHTML(q.card&&q.card.exp)}</div>`;
+}
+/* Explicación de por qué la respuesta correcta es esa: la escribe la IA al crear la tarjeta o el profesor a mano */
+function explicacionHTML(t){
+  t=String(t||'').trim();
+  return t?`<span class="fbExp">💡 ${esc(t)}</span>`:'';
 }
 
 /* Cada pantalla distinta (o cada pregunta nueva) entra con una animación suave */
@@ -4286,7 +4367,7 @@ function calificar(ex,clave,resp,uidEst){
     const c=clave&&clave.correctas?clave.correctas[q.id]:undefined;
     const e=resp?resp[q.id]:undefined;
     const ac=e!==undefined&&c!==undefined&&(esHueco(q)?respuestaHuecoOk(e,c):Number(e)===Number(c));
-    return{q,elegido:e,correcta:c,acierto:ac};
+    return{q,elegido:e,correcta:c,acierto:ac,exp:String(((clave&&clave.explicaciones)||{})[q.id]||'')};
   });
   const ok=det.filter(d=>d.acierto).length,total=det.length||1;
   const escala=ex.escala||5;
@@ -4496,6 +4577,48 @@ function viewDocenteTabHTML(m){
     ${docTab==='examenes'?docenteExamenesHTML(m):docTab==='eventos'?docenteEventosHTML(m):docenteEstudiantesHTML(m)}`;
 }
 
+/* ---------- Seguimiento del grupo: junta todos los exámenes publicados de la materia ----------
+   Por estudiante: cuántos entregó, promedio y la última entrega. Arriba quedan quienes necesitan atención:
+   los que no entregaron 2 o más exámenes ya cerrados o vencidos, y los que van con promedio bajo (menos de 60 %). */
+let segAbierto=false;
+function seguimientoGrupo(m){
+  const exs=examenesDe(m).filter(e=>e.estado!=='borrador');
+  if(!exs.length)return null;
+  const res=exs.map(ex=>({ex,r:resultadosDe(m,ex)}));
+  const vencido=ex=>ex.estado==='cerrado'||(ex.cierre&&ex.cierre<Date.now());
+  const filas=res[0].r.filas.map(f0=>{
+    let entregados=0,faltan=0,ultima=0;const pcts=[];
+    res.forEach(({ex,r})=>{
+      const f=r.filas.find(x=>x.uid===f0.uid);
+      if(f&&f.intento){entregados++;ultima=Math.max(ultima,ms(f.intento.enviado)||0);if(f.res)pcts.push(f.res.pct)}
+      else if(vencido(ex))faltan++;
+    });
+    const prom=pcts.length?Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length):null;
+    const motivos=[];
+    if(faltan>=2)motivos.push('no entregó '+faltan+' exámenes');
+    else if(faltan===1&&!entregados)motivos.push('no ha entregado ningún examen');
+    if(prom!=null&&prom<60)motivos.push('promedio bajo');
+    return{uid:f0.uid,nombre:f0.nombre,email:f0.email,entregados,faltan,prom,ultima,motivos};
+  });
+  filas.sort((a,b)=>(b.motivos.length-a.motivos.length)||((a.prom==null?101:a.prom)-(b.prom==null?101:b.prom))||a.nombre.localeCompare(b.nombre));
+  return{filas,total:exs.length,riesgo:filas.filter(f=>f.motivos.length).length};
+}
+function seguimientoGrupoHTML(m){
+  const g=seguimientoGrupo(m);
+  if(!g||!g.filas.length)return '';
+  return `<div class="card segGrupo" style="margin-bottom:12px">
+    <button type="button" class="segCab" data-action="segToggle" aria-expanded="${segAbierto}">
+      <b>📈 Seguimiento del grupo</b>
+      <span class="meta" style="margin:0">${g.riesgo?`⚠️ ${g.riesgo} estudiante${g.riesgo==1?'':'s'} necesita${g.riesgo==1?'':'n'} atención`:'✅ Nadie se está quedando atrás'} · ${g.total} examen${g.total==1?'':'es'} publicado${g.total==1?'':'s'} ${segAbierto?'▲':'▼'}</span>
+    </button>
+    ${segAbierto?`<div class="segLista">${g.filas.map(f=>`<div class="segFila ${f.motivos.length?'riesgo':''}">
+      <div><b>${esc(f.nombre)}</b><div class="meta" style="margin:0">${esc(f.email)}${f.ultima?' · última entrega '+esc(relTime(f.ultima)):' · sin entregas'}</div>
+        ${f.motivos.length?`<div class="meta" style="margin:2px 0 0;color:var(--no)">⚠️ ${esc(f.motivos.join(' · '))}</div>`:''}</div>
+      <div style="text-align:right;white-space:nowrap"><b style="color:${f.prom==null?'var(--m)':colorPct(f.prom)}">${f.prom==null?'—':f.prom+'%'}</b><div class="meta" style="margin:0">${f.entregados}/${g.total} entregados</div></div>
+    </div>`).join('')}</div>`:''}
+  </div>`;
+}
+
 /* ---------- Lista de exámenes ---------- */
 function docenteExamenesHTML(m){
   const exs=examenesDe(m),nEst=nEstudiantes(m);
@@ -4516,6 +4639,7 @@ function docenteExamenesHTML(m){
     </div>`;
   }).join('');
   return `<div class="viewhead"><h2>📝 Exámenes</h2><span class="row" style="margin:0;flex-wrap:wrap">${exs.some(e=>e.estado!=='borrador')?`<button class="sec" data-action="libroNotas" data-id="${m.id}">⬇️ Libro de notas (Excel)</button>`:''}<button class="pr" data-action="newExam" data-id="${m.id}">+ Nuevo examen</button></span></div>
+    ${seguimientoGrupoHTML(m)}
     ${exs.length?cards:'<div class="empty">Aún no hay exámenes. Crea uno a partir de los temas de tu materia: generas las preguntas, las revisas y las publicas. Después verás las notas de cada estudiante y en qué preguntas fallaron.</div>'}`;
 }
 
@@ -4525,7 +4649,9 @@ function exDividir(buf){
   return{
     examen:{titulo:buf.titulo||'',estado:buf.estado,cierre:buf.cierre||0,escala:buf.escala,creado:buf.creado,publicadoEn:buf.publicadoEn||0,duracion:buf.duracion||0,mezclar:buf.mezclar!==false,porEstudiante:buf.porEstudiante||0,dificultad:buf.dificultad||'mixta',
       preguntas:buf.preguntas.map(q=>({id:q.id,enunciado:q.enunciado||'',opciones:[0,1,2,3].map(i=>q.opciones[i]||''),tipo:q.tipo||'mc',dif:['facil','media','dificil'].includes(q.dif)?q.dif:'media',temaId:q.temaId||'',temaTitulo:q.temaTitulo||''}))},
-    clave:{correctas:Object.fromEntries(buf.preguntas.map(q=>[q.id,q.tipo==='hueco'?String(q.correcta||''):(Number(q.correcta)||0)]))}
+    clave:{correctas:Object.fromEntries(buf.preguntas.map(q=>[q.id,q.tipo==='hueco'?String(q.correcta||''):(Number(q.correcta)||0)])),
+      // La explicación va con la clave: el estudiante solo la puede leer después de entregar
+      explicaciones:Object.fromEntries(buf.preguntas.filter(q=>String(q.exp||'').trim()).map(q=>[q.id,String(q.exp).trim().slice(0,400)]))}
   };
 }
 function setGuardado(t){const el=$('exGuardado');if(el)el.textContent=t}
@@ -4552,10 +4678,10 @@ async function crearExamen(m){
 }
 function abrirEditor(m,exId){
   const ex=(exMap[m.sharedId]||{})[exId];if(!ex)return;
-  const cl=((clMap[m.sharedId]||{})[exId]||{}).correctas||{};
+  const cl=((clMap[m.sharedId]||{})[exId]||{}).correctas||{},cx=((clMap[m.sharedId]||{})[exId]||{}).explicaciones||{};
   exBuf={id:exId,titulo:ex.titulo||'',estado:ex.estado||'borrador',cierre:ex.cierre||0,escala:ex.escala||scaleMax(),creado:ms(ex.creado)||Date.now(),publicadoEn:ex.publicadoEn||0,duracion:ex.duracion||0,mezclar:ex.mezclar!==false,porEstudiante:ex.porEstudiante||0,dificultad:ex.dificultad||'mixta',
     preguntas:(ex.preguntas||[]).map(q=>({id:q.id,enunciado:q.enunciado||'',opciones:[0,1,2,3].map(i=>(q.opciones||[])[i]||''),tipo:q.tipo||'mc',dif:q.dif||'media',
-      correcta:cl[q.id]!==undefined?(q.tipo==='hueco'?String(cl[q.id]):Number(cl[q.id])):(q.tipo==='hueco'?'':0),temaId:q.temaId||'',temaTitulo:q.temaTitulo||''}))};
+      correcta:cl[q.id]!==undefined?(q.tipo==='hueco'?String(cl[q.id]):Number(cl[q.id])):(q.tipo==='hueco'?'':0),temaId:q.temaId||'',temaTitulo:q.temaTitulo||'',exp:cx[q.id]||''}))};
   route={view:'docExamen',materiaId:m.id,examId:exId};
   render();
 }
@@ -4580,7 +4706,7 @@ function generarPreguntas(m,temaIds,n,opts){
   const out=[];
   fuente.forEach(k=>{
     if(out.length>=n)return;
-    const t=state.temas.find(x=>x.id===k.temaId)||{},base={id:uid(),temaId:k.temaId,temaTitulo:t.title||'',fuenteId:k.id,dif:nivel(k)};
+    const t=state.temas.find(x=>x.id===k.temaId)||{},base={id:uid(),temaId:k.temaId,temaTitulo:t.title||'',fuenteId:k.id,dif:nivel(k),exp:String(k.exp||'').trim()};
     const tipo=opts.tipos==='mixto'?tipoPara(k,'mixto'):'mc';
     if(tipo==='hueco'){out.push({...base,tipo:'hueco',enunciado:String(k.hueco.o).trim(),opciones:['','','',''],correcta:String(k.hueco.r).trim()});return}
     if(tipo==='vf'){
@@ -4658,6 +4784,7 @@ function viewDocExamenHTML(){
     <textarea class="fld" data-ex="enun" data-q="${q.id}" placeholder="Escribe la pregunta" ${dis}>${esc(q.enunciado)}</textarea>
     <div class="row" style="flex-wrap:wrap;margin:6px 0"><label class="meta">Dificultad</label><select class="fld" data-ex="qdif" data-q="${q.id}" style="width:auto" ${dis}>${['facil','media','dificil'].map(v=>`<option value="${v}" ${(q.dif||'media')===v?'selected':''}>${nombreDif(v)}</option>`).join('')}</select>${esHueco(q)?'<span class="chip">Completar</span>':q.tipo==='vf'?'<span class="chip">Verdadero o falso</span>':''}</div>
     ${esHueco(q)?`<label class="lbl">Respuesta esperada (se acepta sin tildes ni mayúsculas)</label><input class="fld" data-ex="hueco" data-q="${q.id}" value="${esc(q.correcta||'')}" maxlength="80" ${dis}>`:[0,1,2,3].map(j=>`<div class="exOpt"><button type="button" class="exRadio ${q.correcta===j?'on':''}" data-action="exCorrecta" data-q="${q.id}" data-i="${j}" title="Marcar como correcta" ${dis}>${q.correcta===j?'✓':''}</button><input class="fld" data-ex="opt" data-q="${q.id}" data-i="${j}" value="${esc(q.opciones[j]||'')}" placeholder="Opción ${j+1}${j>1?' (opcional)':''}" ${dis}></div>`).join('')}
+    <label class="lbl">💡 Explicación (opcional, el estudiante la ve después de entregar si falló)</label><textarea class="fld" data-ex="exp" data-q="${q.id}" rows="2" maxlength="400" placeholder="Por qué esta es la respuesta correcta" ${dis}>${esc(q.exp||'')}</textarea>
   </div>`).join(''):'<div class="empty">Aún no hay preguntas. Genera algunas desde tus temas o agrega una manualmente.</div>'}
   ${lock?'':'<button class="sec" data-action="exAddQ">+ Agregar pregunta</button>'}
   <div class="row" style="flex-wrap:wrap;margin-top:18px">
@@ -4810,6 +4937,9 @@ function viewDocResultadosHTML(){
       ${abierto&&f.res?detalleEstudianteHTML(f,ex):''}
     </div>`}).join(''):'<div class="empty">Todavía no hay estudiantes en esta materia.</div>'}
 
+  ${st.entregaron&&r.preguntas.some(p=>p.pct!=null&&p.pct<60)?`<div class="card shareBox" style="margin-top:12px"><b style="font-size:.9em">🎯 Para repasar en clase</b>
+    <p class="meta" style="margin:4px 0 0">Las preguntas que más falló el grupo:</p>
+    <ol class="segTop">${r.preguntas.filter(p=>p.pct!=null&&p.pct<60).sort((a,b)=>a.pct-b.pct).slice(0,3).map(p=>`<li><b style="color:${colorPct(p.pct)}">${p.pct}%</b> ${esc(p.q.enunciado)}${p.peor?`<div class="meta" style="margin:0">Error más común: ${esc(p.peor.texto)}</div>`:''}</li>`).join('')}</ol></div>`:''}
   ${st.entregaron?`<h2 style="margin:22px 0 10px">❓ Resultados por pregunta</h2>
   ${r.preguntas.map((p,i)=>`<div class="card" style="margin-bottom:8px"><div class="row" style="justify-content:space-between;margin-top:0;align-items:flex-start">
       <div><b>${i+1}. ${esc(p.q.enunciado)}</b>${p.q.temaTitulo?`<div class="meta" style="margin:2px 0 0">${esc(p.q.temaTitulo)}</div>`:''}</div>
@@ -5112,7 +5242,7 @@ function viewExamenDocHTML(){
       <p class="meta">Nota: <b>${fmtN(r.nota)} / ${r.escala}</b> · ${r.pct}%</p>
       ${exTom.racha?`<p class="meta" id="exRacha">🔥 Este examen sumó <b>${exTom.racha.aporte}</b> pregunta${exTom.racha.aporte==1?'':'s'} a tu racha de hoy (${exTom.racha.hoyRacha}/${META_RACHA})${exTom.racha.diaNuevo?' · ¡día de racha cumplido!':''}${exTom.racha.extra?' · '+exTom.racha.extra+' de práctica extra':''}.</p>`:''}
       <div class="resList">${r.det.map((d,i)=>`<div class="resRow ${d.acierto?'bien':'mal'}" style="--i:${Math.min(i,14)};margin-top:10px"><b>${i+1}. ${esc(d.q.enunciado)}</b>
-        <div class="meta" style="margin:2px 0 0">${d.acierto?'✅':'❌'} Tu respuesta: <b>${esc(textoRespuesta(d.q,d.elegido)||'(sin responder)')}</b>${d.acierto?'':' · Correcta: <b>'+esc(textoRespuesta(d.q,d.correcta))+'</b>'}</div></div>`).join('')}</div>
+        <div class="meta" style="margin:2px 0 0">${d.acierto?'✅':'❌'} Tu respuesta: <b>${esc(textoRespuesta(d.q,d.elegido)||'(sin responder)')}</b>${d.acierto?'':' · Correcta: <b>'+esc(textoRespuesta(d.q,d.correcta))+'</b>'}</div>${d.acierto?'':explicacionHTML(d.exp)}</div>`).join('')}</div>
     </div>`;
   }
   if(exTom.cargando||miIntento(m,ex.id))return `${volver}<div class="empty" style="margin-top:14px">${err||'Cargando tus resultados…'}</div>`;
@@ -5221,6 +5351,7 @@ document.addEventListener('input',e=>{
     else if(k==='opt')q.opciones[+el.dataset.i]=el.value;
     else if(k==='qdif'){if(['facil','media','dificil'].includes(el.value))q.dif=el.value}
     else if(k==='hueco')q.correcta=el.value;
+    else if(k==='exp')q.exp=el.value.slice(0,400);
   }
   exGuardarLuego();
 });
@@ -5265,6 +5396,7 @@ document.addEventListener('click',async e=>{
       catch(err){console.error(err);UI.alerta('No se pudo quitar'+detalleError(err)+'.')}
     }
   }
+  else if(a==='segToggle'){segAbierto=!segAbierto;render(true)}
   else if(a==='exAddQ'&&exBuf){
     exBuf.preguntas.push({id:uid(),enunciado:'',opciones:['','','',''],correcta:0,tipo:'mc',dif:'media',temaId:'',temaTitulo:''});
     exGuardarLuego();render(true);

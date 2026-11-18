@@ -55,10 +55,11 @@ const ESQUEMA_RESPUESTA = {
           falsa: { type: 'STRING' },
           hueco_oracion: { type: 'STRING' },
           hueco_respuesta: { type: 'STRING' },
-          dificultad: { type: 'STRING' }
+          dificultad: { type: 'STRING' },
+          explicacion: { type: 'STRING' }
         },
-        required: ['frente', 'reverso', 'distractores', 'falsa', 'hueco_oracion', 'hueco_respuesta', 'dificultad'],
-        propertyOrdering: ['frente', 'reverso', 'distractores', 'falsa', 'hueco_oracion', 'hueco_respuesta', 'dificultad']
+        required: ['frente', 'reverso', 'distractores', 'falsa', 'hueco_oracion', 'hueco_respuesta', 'dificultad', 'explicacion'],
+        propertyOrdering: ['frente', 'reverso', 'distractores', 'falsa', 'hueco_oracion', 'hueco_respuesta', 'dificultad', 'explicacion']
       }
     }
   },
@@ -249,15 +250,42 @@ async function leerRol(uid, token) {
   return (d.fields && d.fields.rol && d.fields.rol.stringValue) || null;
 }
 
-const LIMITE_POR_HORA = 30;
-const usoPorUsuario = new Map();
-function superaLimite(uid) {
-  const ahora = Date.now();
-  const recientes = (usoPorUsuario.get(uid) || []).filter(t => ahora - t < 3600 * 1000);
-  if (recientes.length >= LIMITE_POR_HORA) { usoPorUsuario.set(uid, recientes); return true; }
-  recientes.push(ahora);
-  usoPorUsuario.set(uid, recientes);
-  return false;
+// ---------------------------------------------------------------------------------------------
+// Límite POR HORA de peticiones a la IA (cuenta también las que fallan, a diferencia del cupo diario).
+// Antes vivía en la memoria de la instancia de Netlify y se perdía cada vez que esta se apagaba, así que casi no
+// limitaba. Ahora se guarda en Firestore (iaHora/{uid}: {h: número de hora, n: peticiones en esa hora}) con el token
+// de la propia persona; las reglas solo le dejan subirlo de 1 en 1 o reiniciarlo cuando empieza otra hora.
+// Si no se puede leer (por ejemplo, las reglas nuevas aún no están publicadas) se deja pasar y queda el cupo diario.
+// Cámbialo con la variable de entorno LIMITE_IA_HORA en Netlify.
+// ---------------------------------------------------------------------------------------------
+const LIMITE_POR_HORA = Number(process.env.LIMITE_IA_HORA) || 30;
+const horaActual = () => Math.floor(Date.now() / 3600000);
+const urlHora = uid => 'https://firestore.googleapis.com/v1/projects/' + PROYECTO + '/databases/(default)/documents/iaHora/' + uid;
+// Devuelve '' si puede seguir, o el mensaje de error para la persona.
+async function revisarLimiteHora(uid, token) {
+  let n = 0;
+  try {
+    const r = await fetch(urlHora(uid), { headers: { authorization: 'Bearer ' + token } });
+    if (r.ok) {
+      const f = (await r.json()).fields || {};
+      if (Number(f.h && f.h.integerValue) === horaActual()) n = Number(f.n && f.n.integerValue) || 0;
+    } else if (r.status !== 404) {
+      console.error('No se pudo leer el límite por hora (Firestore ' + r.status + '). ¿Publicaste las reglas de iaHora? Se deja pasar.');
+      return '';
+    }
+  } catch (e) { console.error('No se pudo leer el límite por hora:', e); return ''; }
+  if (n >= LIMITE_POR_HORA) return 'Llegaste al límite de ' + LIMITE_POR_HORA + ' archivos por hora. Inténtalo más tarde.';
+  try {
+    const r = await fetch(urlHora(uid), {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
+      body: JSON.stringify({ fields: { h: { integerValue: String(horaActual()) }, n: { integerValue: String(n + 1) } } })
+    });
+    // Si lo pudo leer pero no escribir, casi siempre es otra petición suya al mismo tiempo que ya subió el contador
+    if (r.status === 403) return 'Ya hay otro archivo procesándose. Espera unos segundos y vuelve a intentarlo.';
+    if (!r.ok) console.error('No se pudo registrar el límite por hora (Firestore ' + r.status + ').');
+  } catch (e) { console.error('No se pudo registrar el límite por hora:', e); }
+  return '';
 }
 
 // Hecho por Sebastián Poveda y Santiago Romero. 2026 · punto de entrada de la función
@@ -298,9 +326,8 @@ exports.handler = async (event) => {
       return json(403, { error: 'Solo los profesores pueden generar temas con IA.' });
     }
   }
-  if (superaLimite(usuario.localId)) {
-    return json(429, { error: 'Llegaste al límite de ' + LIMITE_POR_HORA + ' archivos por hora. Inténtalo más tarde.' });
-  }
+  const errHora = await revisarLimiteHora(usuario.localId, tokenDe(event));
+  if (errHora) return json(429, { error: errHora });
 
   const apiKey = process.env.APIKEYGEMINIS;
   if (!apiKey) {
@@ -379,11 +406,12 @@ REGLAS DE LAS TARJETAS:
 - "distractores": EXACTAMENTE 3 respuestas INCORRECTAS pero verosímiles para esa tarjeta: parecidas al reverso en longitud, tono y vocabulario, y de preferencia tomadas de conceptos cercanos del mismo texto. Ninguna puede ser correcta, ni igual al reverso, ni una variación trivial de él. Así la respuesta correcta no se nota por ser la más larga o la más específica.
 - "falsa": una afirmación FALSA sobre ese mismo concepto, con la misma forma que el reverso y creíble (por ejemplo, cambiando un dato, un autor o una causa). Se usa en preguntas de verdadero o falso, así que jamás debe ser verdadera según el texto.
 - "dificultad": EXACTAMENTE "facil" (recordar un dato o una definición directa), "media" (comprender o relacionar ideas) o "dificil" (aplicar, comparar, inferir o distinguir matices parecidos). Reparte las tarjetas entre los tres niveles según lo que pide el texto.
+- "explicacion": una o dos frases (máximo 35 palabras) que expliquen POR QUÉ el reverso es la respuesta correcta, con información del texto. Se le muestra al estudiante cuando falla, así que debe ayudarle a entender el error, no solo repetir la respuesta.
 - "hueco_oracion" y "hueco_respuesta": cuando la tarjeta se preste (definiciones, términos, autores, fechas, nombres), una oración tomada del texto con UN solo hueco marcado con ____ (cuatro guiones bajos) y, en "hueco_respuesta", la palabra o frase corta (1 a 3 palabras) que lo completa. Si la tarjeta no se presta, deja ambos como cadena vacía "".
 
 Devuelve EXCLUSIVAMENTE un JSON válido, sin explicación adicional, con esta forma exacta:
 
-{"titulo":"título corto para el tema (máx 8 palabras)","resumen":"2 o 3 frases","secciones":[{"titulo":"título de la sección","contenido":"contenido de la sección","relacion":"cómo se conecta con otras ideas, o cadena vacía","ideas":[{"tipo":"definicion","termino":"término clave","texto":"explicación corta"},{"tipo":"caracteristica","termino":"otro término","texto":"explicación corta"},{"tipo":"ejemplo","termino":"nombre del caso","texto":"el ejemplo en pocas palabras"}]}],"tarjetas":[{"frente":"término o pregunta corta","reverso":"respuesta clara y breve","distractores":["incorrecta 1","incorrecta 2","incorrecta 3"],"falsa":"afirmación falsa creíble","hueco_oracion":"oración con ____ o cadena vacía","hueco_respuesta":"palabra que falta o cadena vacía","dificultad":"facil, media o dificil"}]}
+{"titulo":"título corto para el tema (máx 8 palabras)","resumen":"2 o 3 frases","secciones":[{"titulo":"título de la sección","contenido":"contenido de la sección","relacion":"cómo se conecta con otras ideas, o cadena vacía","ideas":[{"tipo":"definicion","termino":"término clave","texto":"explicación corta"},{"tipo":"caracteristica","termino":"otro término","texto":"explicación corta"},{"tipo":"ejemplo","termino":"nombre del caso","texto":"el ejemplo en pocas palabras"}]}],"tarjetas":[{"frente":"término o pregunta corta","reverso":"respuesta clara y breve","distractores":["incorrecta 1","incorrecta 2","incorrecta 3"],"falsa":"afirmación falsa creíble","hueco_oracion":"oración con ____ o cadena vacía","hueco_respuesta":"palabra que falta o cadena vacía","dificultad":"facil, media o dificil","explicacion":"por qué esa es la respuesta correcta"}]}
 
 ${bloqueDocumento}`;
 
@@ -465,6 +493,7 @@ ${bloqueDocumento}`;
       t.falsa = txt(t.falsa).toLowerCase() === rev ? '' : txt(t.falsa);
       t.hueco_oracion = txt(t.hueco_oracion);
       t.hueco_respuesta = txt(t.hueco_respuesta);
+      t.explicacion = txt(t.explicacion).slice(0, 400);
       t.dificultad = ['facil', 'media', 'dificil'].includes(txt(t.dificultad).toLowerCase()) ? txt(t.dificultad).toLowerCase() : 'media';
       if (!t.hueco_oracion.includes('____') || !t.hueco_respuesta) { t.hueco_oracion = ''; t.hueco_respuesta = ''; }
     });
