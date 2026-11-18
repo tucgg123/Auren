@@ -473,6 +473,7 @@ function cardRow(c){
   return `<div class="cardRow" data-card="${c.id}">
     <span class="cl">Frente</span><textarea class="fld sm cf" rows="1" data-action="editCardFront" data-id="${c.id}" placeholder="Frente (término / pregunta)">${esc(c.front)}</textarea>
     <span class="cl">Reverso</span><textarea class="fld sm cb" rows="1" data-action="editCardBack" data-id="${c.id}" placeholder="Reverso (definición / respuesta)">${esc(c.back)}</textarea>
+    <span class="cl">Por qué</span><textarea class="fld sm ce" rows="1" data-action="editCardExp" data-id="${c.id}" placeholder="Explicación (opcional): se muestra cuando alguien falla esta tarjeta" maxlength="400">${esc(c.exp||'')}</textarea>
     <button class="icon-btn" data-action="delCard" data-id="${c.id}" title="Eliminar tarjeta">🗑️</button>
   </div>`;
 }

@@ -18,7 +18,12 @@ function reducido(){
 function feedbackHTML(acierto,q,idx){
   return acierto
     ?`<div class="fb fbOk" role="status">🎉 ${FRASES_OK[idx%FRASES_OK.length]}</div>`
-    :`<div class="fb fbNo" role="status">😕 ${FRASES_NO[idx%FRASES_NO.length]}<span>La correcta: <b>${esc(q.correcta)}</b></span></div>`;
+    :`<div class="fb fbNo" role="status">😕 ${FRASES_NO[idx%FRASES_NO.length]}<span>La correcta: <b>${esc(q.correcta)}</b></span>${explicacionHTML(q.card&&q.card.exp)}</div>`;
+}
+/* Explicación de por qué la respuesta correcta es esa: la escribe la IA al crear la tarjeta o el profesor a mano */
+function explicacionHTML(t){
+  t=String(t||'').trim();
+  return t?`<span class="fbExp">💡 ${esc(t)}</span>`:'';
 }
 
 /* Cada pantalla distinta (o cada pregunta nueva) entra con una animación suave */

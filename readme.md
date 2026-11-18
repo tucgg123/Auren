@@ -42,6 +42,8 @@ Netlify también ejecuta `npm run build` en cada despliegue, así que lo publica
 ## Cosas que conviene saber
 - El dibujo de circuitos del fondo está en `fondo-circuito.svg` y solo se descarga en pantallas de más de 760 px con los efectos activados; en celulares no se carga.
 - Accesibilidad: enlace "Saltar al contenido" para teclado, foco visible en todos los botones y las flashcards se voltean con Enter o Espacio.
+- El cuaderno de cada estudiante se guarda por partes: lo general en `users/{uid}` y cada materia en `users/{uid}/materias/{id}`. Solo se sube lo que cambió, así estudiar en dos equipos ya no borra lo del otro (salvo que se edite la **misma** materia en ambos a la vez). Las cuentas antiguas se pasan solas al formato nuevo.
+- El límite de archivos por hora para la IA se guarda en Firestore (`iaHora/{uid}`), igual que el cupo diario. Se cambia con la variable `LIMITE_IA_HORA` en Netlify (por defecto 30).
 - En cada materia, el estudiante tiene un tablero de apuntes tipo post-it (con título) y, dentro de cada tema, una pestaña "Mis apuntes". Ambos son privados.
 - Las imágenes de los temas se guardan comprimidas en Firestore (hasta ~700 KB cada una, máximo 12 imágenes o videos por tema). Los videos son enlaces; se incrustan los de YouTube y Vimeo.
 - El PDF comprimido pierde el texto seleccionable (la IA siempre lee el original). Es una copia para guardar o descargar.

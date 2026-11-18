@@ -380,6 +380,10 @@ document.addEventListener('input',e=>{
     const c=state.cards.find(x=>x.id===id);if(!c)return;
     c.back=e.target.value;persist();
   }
+  else if(a==='editCardExp'){
+    const c=state.cards.find(x=>x.id===id);if(!c)return;
+    const v=e.target.value.slice(0,400);if(v.trim())c.exp=v;else delete c.exp;persist();
+  }
   else if(a==='editMateriaRefs'){
     const m=state.materias.find(x=>x.id===id);if(!m)return;
     m.refs=e.target.value;persist();

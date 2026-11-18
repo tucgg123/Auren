@@ -136,7 +136,7 @@ function viewExamenDocHTML(){
       <p class="meta">Nota: <b>${fmtN(r.nota)} / ${r.escala}</b> · ${r.pct}%</p>
       ${exTom.racha?`<p class="meta" id="exRacha">🔥 Este examen sumó <b>${exTom.racha.aporte}</b> pregunta${exTom.racha.aporte==1?'':'s'} a tu racha de hoy (${exTom.racha.hoyRacha}/${META_RACHA})${exTom.racha.diaNuevo?' · ¡día de racha cumplido!':''}${exTom.racha.extra?' · '+exTom.racha.extra+' de práctica extra':''}.</p>`:''}
       <div class="resList">${r.det.map((d,i)=>`<div class="resRow ${d.acierto?'bien':'mal'}" style="--i:${Math.min(i,14)};margin-top:10px"><b>${i+1}. ${esc(d.q.enunciado)}</b>
-        <div class="meta" style="margin:2px 0 0">${d.acierto?'✅':'❌'} Tu respuesta: <b>${esc(textoRespuesta(d.q,d.elegido)||'(sin responder)')}</b>${d.acierto?'':' · Correcta: <b>'+esc(textoRespuesta(d.q,d.correcta))+'</b>'}</div></div>`).join('')}</div>
+        <div class="meta" style="margin:2px 0 0">${d.acierto?'✅':'❌'} Tu respuesta: <b>${esc(textoRespuesta(d.q,d.elegido)||'(sin responder)')}</b>${d.acierto?'':' · Correcta: <b>'+esc(textoRespuesta(d.q,d.correcta))+'</b>'}</div>${d.acierto?'':explicacionHTML(d.exp)}</div>`).join('')}</div>
     </div>`;
   }
   if(exTom.cargando||miIntento(m,ex.id))return `${volver}<div class="empty" style="margin-top:14px">${err||'Cargando tus resultados…'}</div>`;
@@ -245,6 +245,7 @@ document.addEventListener('input',e=>{
     else if(k==='opt')q.opciones[+el.dataset.i]=el.value;
     else if(k==='qdif'){if(['facil','media','dificil'].includes(el.value))q.dif=el.value}
     else if(k==='hueco')q.correcta=el.value;
+    else if(k==='exp')q.exp=el.value.slice(0,400);
   }
   exGuardarLuego();
 });
@@ -289,6 +290,7 @@ document.addEventListener('click',async e=>{
       catch(err){console.error(err);UI.alerta('No se pudo quitar'+detalleError(err)+'.')}
     }
   }
+  else if(a==='segToggle'){segAbierto=!segAbierto;render(true)}
   else if(a==='exAddQ'&&exBuf){
     exBuf.preguntas.push({id:uid(),enunciado:'',opciones:['','','',''],correcta:0,tipo:'mc',dif:'media',temaId:'',temaTitulo:''});
     exGuardarLuego();render(true);

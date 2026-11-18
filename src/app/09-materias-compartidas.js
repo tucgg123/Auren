@@ -38,7 +38,7 @@ function contenidoTema(t){
     archivo:tieneOriginal(t.archivo)?t.archivo:null,
     medios:Array.isArray(t.medios)?t.medios:[],
     ...(esDocenteMat(t.materiaId)?{corte:((state.cortes.find(c=>c.id===t.corteId)||{}).name||'')}:{}),
-    cards:state.cards.filter(c=>c.temaId===t.id).map(c=>{const o={id:c.id,front:c.front||'',back:c.back||''};if(Array.isArray(c.dist)&&c.dist.length)o.dist=c.dist;if(c.falsa)o.falsa=c.falsa;if(c.hueco)o.hueco=c.hueco;if(c.dif)o.dif=c.dif;return o})
+    cards:state.cards.filter(c=>c.temaId===t.id).map(c=>{const o={id:c.id,front:c.front||'',back:c.back||''};if(Array.isArray(c.dist)&&c.dist.length)o.dist=c.dist;if(c.falsa)o.falsa=c.falsa;if(c.hueco)o.hueco=c.hueco;if(c.dif)o.dif=c.dif;if(c.exp)o.exp=c.exp;return o})
   };
 }
 
@@ -114,7 +114,7 @@ function aplicarTemaRemoto(m,id,d){
   (d.cards||[]).forEach(c=>{
     const v=viejas.get(c.id)||{},n={id:c.id,temaId:id,materiaId:m.id,front:c.front||'',back:c.back||'',known:v.known===undefined?null:v.known};
     ['box','due','last','lastOk','fails'].forEach(k=>{if(v[k]!==undefined)n[k]=v[k]});      // mi progreso de repaso es solo mío: no se pierde cuando el profesor cambia el tema
-    if(Array.isArray(c.dist)&&c.dist.length)n.dist=c.dist;if(c.falsa)n.falsa=c.falsa;if(c.hueco)n.hueco=c.hueco;if(c.dif)n.dif=c.dif;
+    if(Array.isArray(c.dist)&&c.dist.length)n.dist=c.dist;if(c.falsa)n.falsa=c.falsa;if(c.hueco)n.hueco=c.hueco;if(c.dif)n.dif=c.dif;if(c.exp)n.exp=c.exp;
     state.cards.push(n);
   });
   sharedLast[id]={sid:m.sharedId,k:JSON.stringify(contenidoTema(t))};

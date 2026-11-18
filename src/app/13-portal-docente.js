@@ -58,7 +58,7 @@ function calificar(ex,clave,resp,uidEst){
     const c=clave&&clave.correctas?clave.correctas[q.id]:undefined;
     const e=resp?resp[q.id]:undefined;
     const ac=e!==undefined&&c!==undefined&&(esHueco(q)?respuestaHuecoOk(e,c):Number(e)===Number(c));
-    return{q,elegido:e,correcta:c,acierto:ac};
+    return{q,elegido:e,correcta:c,acierto:ac,exp:String(((clave&&clave.explicaciones)||{})[q.id]||'')};
   });
   const ok=det.filter(d=>d.acierto).length,total=det.length||1;
   const escala=ex.escala||5;
@@ -268,6 +268,48 @@ function viewDocenteTabHTML(m){
     ${docTab==='examenes'?docenteExamenesHTML(m):docTab==='eventos'?docenteEventosHTML(m):docenteEstudiantesHTML(m)}`;
 }
 
+/* ---------- Seguimiento del grupo: junta todos los exámenes publicados de la materia ----------
+   Por estudiante: cuántos entregó, promedio y la última entrega. Arriba quedan quienes necesitan atención:
+   los que no entregaron 2 o más exámenes ya cerrados o vencidos, y los que van con promedio bajo (menos de 60 %). */
+let segAbierto=false;
+function seguimientoGrupo(m){
+  const exs=examenesDe(m).filter(e=>e.estado!=='borrador');
+  if(!exs.length)return null;
+  const res=exs.map(ex=>({ex,r:resultadosDe(m,ex)}));
+  const vencido=ex=>ex.estado==='cerrado'||(ex.cierre&&ex.cierre<Date.now());
+  const filas=res[0].r.filas.map(f0=>{
+    let entregados=0,faltan=0,ultima=0;const pcts=[];
+    res.forEach(({ex,r})=>{
+      const f=r.filas.find(x=>x.uid===f0.uid);
+      if(f&&f.intento){entregados++;ultima=Math.max(ultima,ms(f.intento.enviado)||0);if(f.res)pcts.push(f.res.pct)}
+      else if(vencido(ex))faltan++;
+    });
+    const prom=pcts.length?Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length):null;
+    const motivos=[];
+    if(faltan>=2)motivos.push('no entregó '+faltan+' exámenes');
+    else if(faltan===1&&!entregados)motivos.push('no ha entregado ningún examen');
+    if(prom!=null&&prom<60)motivos.push('promedio bajo');
+    return{uid:f0.uid,nombre:f0.nombre,email:f0.email,entregados,faltan,prom,ultima,motivos};
+  });
+  filas.sort((a,b)=>(b.motivos.length-a.motivos.length)||((a.prom==null?101:a.prom)-(b.prom==null?101:b.prom))||a.nombre.localeCompare(b.nombre));
+  return{filas,total:exs.length,riesgo:filas.filter(f=>f.motivos.length).length};
+}
+function seguimientoGrupoHTML(m){
+  const g=seguimientoGrupo(m);
+  if(!g||!g.filas.length)return '';
+  return `<div class="card segGrupo" style="margin-bottom:12px">
+    <button type="button" class="segCab" data-action="segToggle" aria-expanded="${segAbierto}">
+      <b>📈 Seguimiento del grupo</b>
+      <span class="meta" style="margin:0">${g.riesgo?`⚠️ ${g.riesgo} estudiante${g.riesgo==1?'':'s'} necesita${g.riesgo==1?'':'n'} atención`:'✅ Nadie se está quedando atrás'} · ${g.total} examen${g.total==1?'':'es'} publicado${g.total==1?'':'s'} ${segAbierto?'▲':'▼'}</span>
+    </button>
+    ${segAbierto?`<div class="segLista">${g.filas.map(f=>`<div class="segFila ${f.motivos.length?'riesgo':''}">
+      <div><b>${esc(f.nombre)}</b><div class="meta" style="margin:0">${esc(f.email)}${f.ultima?' · última entrega '+esc(relTime(f.ultima)):' · sin entregas'}</div>
+        ${f.motivos.length?`<div class="meta" style="margin:2px 0 0;color:var(--no)">⚠️ ${esc(f.motivos.join(' · '))}</div>`:''}</div>
+      <div style="text-align:right;white-space:nowrap"><b style="color:${f.prom==null?'var(--m)':colorPct(f.prom)}">${f.prom==null?'—':f.prom+'%'}</b><div class="meta" style="margin:0">${f.entregados}/${g.total} entregados</div></div>
+    </div>`).join('')}</div>`:''}
+  </div>`;
+}
+
 /* ---------- Lista de exámenes ---------- */
 function docenteExamenesHTML(m){
   const exs=examenesDe(m),nEst=nEstudiantes(m);
@@ -288,6 +330,7 @@ function docenteExamenesHTML(m){
     </div>`;
   }).join('');
   return `<div class="viewhead"><h2>📝 Exámenes</h2><span class="row" style="margin:0;flex-wrap:wrap">${exs.some(e=>e.estado!=='borrador')?`<button class="sec" data-action="libroNotas" data-id="${m.id}">⬇️ Libro de notas (Excel)</button>`:''}<button class="pr" data-action="newExam" data-id="${m.id}">+ Nuevo examen</button></span></div>
+    ${seguimientoGrupoHTML(m)}
     ${exs.length?cards:'<div class="empty">Aún no hay exámenes. Crea uno a partir de los temas de tu materia: generas las preguntas, las revisas y las publicas. Después verás las notas de cada estudiante y en qué preguntas fallaron.</div>'}`;
 }
 
@@ -297,7 +340,9 @@ function exDividir(buf){
   return{
     examen:{titulo:buf.titulo||'',estado:buf.estado,cierre:buf.cierre||0,escala:buf.escala,creado:buf.creado,publicadoEn:buf.publicadoEn||0,duracion:buf.duracion||0,mezclar:buf.mezclar!==false,porEstudiante:buf.porEstudiante||0,dificultad:buf.dificultad||'mixta',
       preguntas:buf.preguntas.map(q=>({id:q.id,enunciado:q.enunciado||'',opciones:[0,1,2,3].map(i=>q.opciones[i]||''),tipo:q.tipo||'mc',dif:['facil','media','dificil'].includes(q.dif)?q.dif:'media',temaId:q.temaId||'',temaTitulo:q.temaTitulo||''}))},
-    clave:{correctas:Object.fromEntries(buf.preguntas.map(q=>[q.id,q.tipo==='hueco'?String(q.correcta||''):(Number(q.correcta)||0)]))}
+    clave:{correctas:Object.fromEntries(buf.preguntas.map(q=>[q.id,q.tipo==='hueco'?String(q.correcta||''):(Number(q.correcta)||0)])),
+      // La explicación va con la clave: el estudiante solo la puede leer después de entregar
+      explicaciones:Object.fromEntries(buf.preguntas.filter(q=>String(q.exp||'').trim()).map(q=>[q.id,String(q.exp).trim().slice(0,400)]))}
   };
 }
 function setGuardado(t){const el=$('exGuardado');if(el)el.textContent=t}
@@ -324,10 +369,10 @@ async function crearExamen(m){
 }
 function abrirEditor(m,exId){
   const ex=(exMap[m.sharedId]||{})[exId];if(!ex)return;
-  const cl=((clMap[m.sharedId]||{})[exId]||{}).correctas||{};
+  const cl=((clMap[m.sharedId]||{})[exId]||{}).correctas||{},cx=((clMap[m.sharedId]||{})[exId]||{}).explicaciones||{};
   exBuf={id:exId,titulo:ex.titulo||'',estado:ex.estado||'borrador',cierre:ex.cierre||0,escala:ex.escala||scaleMax(),creado:ms(ex.creado)||Date.now(),publicadoEn:ex.publicadoEn||0,duracion:ex.duracion||0,mezclar:ex.mezclar!==false,porEstudiante:ex.porEstudiante||0,dificultad:ex.dificultad||'mixta',
     preguntas:(ex.preguntas||[]).map(q=>({id:q.id,enunciado:q.enunciado||'',opciones:[0,1,2,3].map(i=>(q.opciones||[])[i]||''),tipo:q.tipo||'mc',dif:q.dif||'media',
-      correcta:cl[q.id]!==undefined?(q.tipo==='hueco'?String(cl[q.id]):Number(cl[q.id])):(q.tipo==='hueco'?'':0),temaId:q.temaId||'',temaTitulo:q.temaTitulo||''}))};
+      correcta:cl[q.id]!==undefined?(q.tipo==='hueco'?String(cl[q.id]):Number(cl[q.id])):(q.tipo==='hueco'?'':0),temaId:q.temaId||'',temaTitulo:q.temaTitulo||'',exp:cx[q.id]||''}))};
   route={view:'docExamen',materiaId:m.id,examId:exId};
   render();
 }
@@ -352,7 +397,7 @@ function generarPreguntas(m,temaIds,n,opts){
   const out=[];
   fuente.forEach(k=>{
     if(out.length>=n)return;
-    const t=state.temas.find(x=>x.id===k.temaId)||{},base={id:uid(),temaId:k.temaId,temaTitulo:t.title||'',fuenteId:k.id,dif:nivel(k)};
+    const t=state.temas.find(x=>x.id===k.temaId)||{},base={id:uid(),temaId:k.temaId,temaTitulo:t.title||'',fuenteId:k.id,dif:nivel(k),exp:String(k.exp||'').trim()};
     const tipo=opts.tipos==='mixto'?tipoPara(k,'mixto'):'mc';
     if(tipo==='hueco'){out.push({...base,tipo:'hueco',enunciado:String(k.hueco.o).trim(),opciones:['','','',''],correcta:String(k.hueco.r).trim()});return}
     if(tipo==='vf'){
@@ -430,6 +475,7 @@ function viewDocExamenHTML(){
     <textarea class="fld" data-ex="enun" data-q="${q.id}" placeholder="Escribe la pregunta" ${dis}>${esc(q.enunciado)}</textarea>
     <div class="row" style="flex-wrap:wrap;margin:6px 0"><label class="meta">Dificultad</label><select class="fld" data-ex="qdif" data-q="${q.id}" style="width:auto" ${dis}>${['facil','media','dificil'].map(v=>`<option value="${v}" ${(q.dif||'media')===v?'selected':''}>${nombreDif(v)}</option>`).join('')}</select>${esHueco(q)?'<span class="chip">Completar</span>':q.tipo==='vf'?'<span class="chip">Verdadero o falso</span>':''}</div>
     ${esHueco(q)?`<label class="lbl">Respuesta esperada (se acepta sin tildes ni mayúsculas)</label><input class="fld" data-ex="hueco" data-q="${q.id}" value="${esc(q.correcta||'')}" maxlength="80" ${dis}>`:[0,1,2,3].map(j=>`<div class="exOpt"><button type="button" class="exRadio ${q.correcta===j?'on':''}" data-action="exCorrecta" data-q="${q.id}" data-i="${j}" title="Marcar como correcta" ${dis}>${q.correcta===j?'✓':''}</button><input class="fld" data-ex="opt" data-q="${q.id}" data-i="${j}" value="${esc(q.opciones[j]||'')}" placeholder="Opción ${j+1}${j>1?' (opcional)':''}" ${dis}></div>`).join('')}
+    <label class="lbl">💡 Explicación (opcional, el estudiante la ve después de entregar si falló)</label><textarea class="fld" data-ex="exp" data-q="${q.id}" rows="2" maxlength="400" placeholder="Por qué esta es la respuesta correcta" ${dis}>${esc(q.exp||'')}</textarea>
   </div>`).join(''):'<div class="empty">Aún no hay preguntas. Genera algunas desde tus temas o agrega una manualmente.</div>'}
   ${lock?'':'<button class="sec" data-action="exAddQ">+ Agregar pregunta</button>'}
   <div class="row" style="flex-wrap:wrap;margin-top:18px">
@@ -582,6 +628,9 @@ function viewDocResultadosHTML(){
       ${abierto&&f.res?detalleEstudianteHTML(f,ex):''}
     </div>`}).join(''):'<div class="empty">Todavía no hay estudiantes en esta materia.</div>'}
 
+  ${st.entregaron&&r.preguntas.some(p=>p.pct!=null&&p.pct<60)?`<div class="card shareBox" style="margin-top:12px"><b style="font-size:.9em">🎯 Para repasar en clase</b>
+    <p class="meta" style="margin:4px 0 0">Las preguntas que más falló el grupo:</p>
+    <ol class="segTop">${r.preguntas.filter(p=>p.pct!=null&&p.pct<60).sort((a,b)=>a.pct-b.pct).slice(0,3).map(p=>`<li><b style="color:${colorPct(p.pct)}">${p.pct}%</b> ${esc(p.q.enunciado)}${p.peor?`<div class="meta" style="margin:0">Error más común: ${esc(p.peor.texto)}</div>`:''}</li>`).join('')}</ol></div>`:''}
   ${st.entregaron?`<h2 style="margin:22px 0 10px">❓ Resultados por pregunta</h2>
   ${r.preguntas.map((p,i)=>`<div class="card" style="margin-bottom:8px"><div class="row" style="justify-content:space-between;margin-top:0;align-items:flex-start">
       <div><b>${i+1}. ${esc(p.q.enunciado)}</b>${p.q.temaTitulo?`<div class="meta" style="margin:2px 0 0">${esc(p.q.temaTitulo)}</div>`:''}</div>

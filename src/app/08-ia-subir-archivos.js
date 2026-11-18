@@ -1,7 +1,7 @@
 /* ================= IA: SUBIR PDF/PPTX Y GENERAR TEMA + TARJETAS ================= */
 /* Caché de resultados de IA: si subes otra vez el mismo archivo, se reutiliza el resultado
    y NO se gasta una petición del límite diario de Gemini (que cuenta peticiones, no tokens). */
-const IA_CACHE_VER='v7';   // súbela cada vez que cambies las instrucciones de la IA, para no reutilizar resultados viejos
+const IA_CACHE_VER='v8';   // súbela cada vez que cambies las instrucciones de la IA, para no reutilizar resultados viejos
 const IA_LIMITE_DIARIO=20;   // archivos (PDF o PPTX) por persona y por día. Debe coincidir con LIMITE_DIARIO en netlify/functions/generar-tema.js
 const IA_MAX_CHARS=60000;   // texto máximo que se manda a la IA (antes 20 000: el resto se ignoraba en silencio)
 const IA_CACHE_MAX=15;     // cuántos resultados se recuerdan en este navegador
@@ -299,6 +299,7 @@ document.addEventListener('change',async e=>{
           if(String(t.falsa||'').trim())c.falsa=String(t.falsa).trim();    // afirmación falsa (verdadero/falso)
           if(String(t.hueco_oracion||'').includes('____')&&String(t.hueco_respuesta||'').trim())c.hueco={o:String(t.hueco_oracion).trim(),r:String(t.hueco_respuesta).trim()};
           if(['facil','media','dificil'].includes(t.dificultad))c.dif=t.dificultad;                  // qué tan difícil es, según la IA
+          if(String(t.explicacion||'').trim())c.exp=String(t.explicacion).trim().slice(0,400);       // por qué la respuesta es esa (se muestra al fallar)
           s.cards.push(c);
         }
       });

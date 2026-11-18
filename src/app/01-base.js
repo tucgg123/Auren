@@ -604,6 +604,7 @@ async function borrarMiCuenta(){
     }
     await borrarColeccionPropia('anotaciones/'+uidViejo+'/items');
     await borrarColeccionPropia('bancoPreguntas/'+uidViejo+'/items');
+    await borrarColeccionPropia('users/'+uidViejo+'/materias');
     await db.collection('users').doc(uidViejo).delete();
     await db.collection('usuarios').doc(uidViejo).delete();
     await u.delete();
@@ -642,7 +643,7 @@ function syncOk(){sync.fallo='';pintarBanner()}
 function revisarTamano(bytes){
   const pct=Math.round(bytes/FIRESTORE_MAX*100);
   sync.tamAlto=pct>=80;
-  sync.aviso=sync.tamAlto?'💾 Tu cuaderno ocupa el '+pct+' % del espacio que permite la nube. Si se llena dejará de sincronizarse: libera espacio.':'';
+  sync.aviso=sync.tamAlto?'💾 Una de tus materias ocupa el '+pct+' % del espacio que permite la nube. Si se llena dejará de sincronizarse: libera espacio.':'';
 }
 async function liberarEspacio(){
   const lim=Date.now()-120*864e5,viejos=(state.attempts||[]).filter(a=>a.date<lim).length;
@@ -653,10 +654,10 @@ async function reintentarSync(){
   if(!currentUid)return;
   if(sync.soloLocal){
     try{
-      const doc=await db.collection('users').doc(currentUid).get();
-      if(doc.exists&&doc.data().data){
+      const nube=await leerNube(currentUid);
+      if(nube){
         if(await UI.confirmar('Se encontró tu cuaderno guardado en la nube.\n\nAceptar = cargar la versión de la nube (se descartan los cambios hechos sin conexión en este dispositivo).\nCancelar = conservar lo de este dispositivo y reemplazar la nube.')){
-          state=JSON.parse(doc.data().data);normalizeState();saveLocal();applyTheme();updateThemeBtn();render();startShared();
+          state=nube;normalizeState();saveLocal();applyTheme();updateThemeBtn();render();startShared();
         }
       }
       sync.soloLocal=false;sync.fallo='';
@@ -667,7 +668,54 @@ async function reintentarSync(){
 window.addEventListener('online',()=>{sync.offline=false;pintarBanner();pushCloudNow()});
 window.addEventListener('offline',()=>{sync.offline=true;pintarBanner()});
 
-let cloudTimer=null;
+/* ---------- Nube por partes ----------
+   Antes todo el cuaderno era UN documento (users/{uid}) que se reemplazaba entero: si se estudiaba en dos equipos,
+   el último en guardar borraba lo del otro, y Firestore no deja pasar de 1 MB por documento.
+   Ahora:  users/{uid}                 -> lo general (perfil, semestres, calendario, racha...) en el campo "global"
+           users/{uid}/materias/{id}   -> cada materia con sus temas, cortes, tarjetas e intentos
+   Solo se sube lo que cambió desde la última vez, así un equipo no pisa las materias que tocó el otro.
+   Las cuentas antiguas (campo "data" con todo junto) se pasan solas al formato nuevo la primera vez que se guarda. */
+const PARTES_MATERIA=['temas','cortes','cards','attempts'];
+const nubeSubido=new Map();          // id de materia (o '__raiz') -> JSON que ya está en la nube
+function partirEstado(s){
+  const ids=new Set((s.materias||[]).map(m=>m.id)),mats={},raiz={};
+  (s.materias||[]).forEach(m=>{mats[m.id]={materia:m}});
+  Object.keys(s).forEach(k=>{
+    if(k==='materias')return;
+    if(PARTES_MATERIA.includes(k)&&Array.isArray(s[k])){
+      raiz[k]=[];
+      s[k].forEach(x=>{if(x&&ids.has(x.materiaId))(mats[x.materiaId][k]=mats[x.materiaId][k]||[]).push(x);else raiz[k].push(x)});
+      return;
+    }
+    raiz[k]=s[k];
+  });
+  raiz.orden=(s.materias||[]).map(m=>m.id);
+  return{raiz,mats};
+}
+function unirEstado(raiz,partes){
+  const s=Object.assign({},raiz),orden=s.orden||[];delete s.orden;
+  partes=partes.slice().sort((a,b)=>{const i=orden.indexOf(a.materia.id),j=orden.indexOf(b.materia.id);return(i<0?1e9:i)-(j<0?1e9:j)});
+  s.materias=partes.map(p=>p.materia);
+  PARTES_MATERIA.forEach(k=>{s[k]=(s[k]||[]).slice();partes.forEach(p=>{if(Array.isArray(p[k]))s[k].push(...p[k])})});
+  return s;
+}
+/* Lee el cuaderno de la nube. Devuelve null si la cuenta todavía no tiene nada guardado. */
+async function leerNube(u){
+  const ref=db.collection('users').doc(u),doc=await ref.get();
+  const d=doc.exists?doc.data():null;
+  if(d&&d.global){
+    const snap=await ref.collection('materias').get();
+    nubeSubido.clear();nubeSubido.set('__raiz',d.global);
+    const partes=[];
+    snap.docs.forEach(x=>{try{const p=JSON.parse(x.data().data);if(p&&p.materia){partes.push(p);nubeSubido.set(x.id,x.data().data)}}catch(e){console.warn('Materia ilegible en la nube:',x.id,e)}});
+    return unirEstado(JSON.parse(d.global),partes);
+  }
+  nubeSubido.clear();
+  if(d&&d.data)return JSON.parse(d.data);          // formato antiguo: todo en un solo documento
+  return null;
+}
+
+let cloudTimer=null,subiendo=false,subirOtraVez=false;
 function scheduleCloud(){
   if(!currentUid)return;
   clearTimeout(cloudTimer);
@@ -675,24 +723,46 @@ function scheduleCloud(){
 }
 async function pushCloudNow(){
   if(!currentUid)return;
+  if(subiendo){subirOtraVez=true;return}
   pushShared();
   if(sync.soloLocal){sync.fallo='⚠️ No se pudo leer tu cuaderno de la nube al iniciar. Por seguridad no se sube nada para no pisarlo con datos viejos. Tus cambios siguen en este dispositivo.';pintarBanner();return}
+  subiendo=true;
+  const uidAhora=currentUid;
   try{
-    const data=JSON.stringify(state);
-    revisarTamano(new Blob([data]).size);
-    await db.collection('users').doc(currentUid).set({
-      data,
-      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    const{raiz,mats}=partirEstado(state),ref=db.collection('users').doc(uidAhora);
+    const ahora=()=>firebase.firestore.FieldValue.serverTimestamp();
+    let mayor=0;const tareas=[];
+    Object.keys(mats).forEach(id=>{
+      const data=JSON.stringify(mats[id]);
+      mayor=Math.max(mayor,new Blob([data]).size);
+      if(nubeSubido.get(id)!==data)tareas.push(ref.collection('materias').doc(id).set({data,updatedAt:ahora()}).then(()=>nubeSubido.set(id,data)));
     });
+    [...nubeSubido.keys()].filter(id=>id!=='__raiz'&&!mats[id]).forEach(id=>{
+      tareas.push(ref.collection('materias').doc(id).delete().then(()=>nubeSubido.delete(id)));
+    });
+    const global=JSON.stringify(raiz);
+    mayor=Math.max(mayor,new Blob([global]).size);
+    revisarTamano(mayor);
+    await Promise.all(tareas);
+    // La raíz va al final: si algo de arriba falla, no queda apuntando a materias a medio subir
+    if(nubeSubido.get('__raiz')!==global){
+      await ref.set({global,v:2,updatedAt:ahora()});      // set() sin merge: borra el campo "data" del formato antiguo
+      nubeSubido.set('__raiz',global);
+    }
     syncOk();
   }catch(e){console.error('No se pudo sincronizar con la nube:',e);syncFallo(e)}
+  finally{
+    subiendo=false;
+    if(subirOtraVez&&currentUid===uidAhora){subirOtraVez=false;pushCloudNow()}
+  }
 }
 async function hydrateFromCloud(u){
   currentUid=u;
   try{
-    const doc=await db.collection('users').doc(u).get();
-    if(doc.exists && doc.data().data){
-      state=JSON.parse(doc.data().data);
+    const nube=await leerNube(u);
+    if(nube){
+      state=nube;
+      if(!nubeSubido.size){normalizeState();saveLocal();await pushCloudNow();return}   // cuenta antigua: se pasa al formato nuevo
     }else{
       state=loadLocal()||defaultState();
       await pushCloudNow();
