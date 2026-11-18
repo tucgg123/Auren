@@ -207,11 +207,10 @@ function guiaHTML(){
   const pasos=pasosGuia(),hechos=pasos.filter(p=>p.ok).length;
   if(hechos===pasos.length)return '';
   const sig=pasos.findIndex(p=>!p.ok);
-  return `<div class="card guia" style="margin-bottom:14px">
-    <div class="row" style="justify-content:space-between;margin-top:0;align-items:center"><b>👋 Primeros pasos en Auren</b><span class="row" style="margin:0;gap:8px"><span class="chip">${hechos}/${pasos.length}</span><button type="button" class="sec sm" data-action="guiaOcultar">Ocultar</button></span></div>
-    <div class="bar mini" style="margin:8px 0 4px"><i style="width:${Math.round(hechos/pasos.length*100)}%"></i></div>
+  const cuerpo=`<div class="guia"><div class="bar mini" style="margin:0 0 4px"><i style="width:${Math.round(hechos/pasos.length*100)}%"></i></div>
     <ol class="guiaPasos">${pasos.map((p,i)=>`<li class="${p.ok?'ok':i===sig?'sig':''}"><span class="gIco" aria-hidden="true">${p.ok?'✅':i===sig?'👉':'○'}</span><div><b>${esc(p.t)}</b>${p.ok?'<span class="sr">(hecho)</span>':''}${i===sig?`<div class="meta" style="margin:2px 0 0">${esc(p.d)}</div>${p.accion?`<button type="button" class="sec sm" style="margin-top:6px" data-action="${p.accion}">${p.btn}</button>`:''}`:''}</div></li>`).join('')}</ol>
-  </div>`;
+    <button type="button" class="sec sm" data-action="guiaOcultar" style="margin-top:6px">Ocultar esta guía</button></div>`;
+  return dwHTML('guia','Primeros pasos en Auren',hechos+' de '+pasos.length+' hechos · sigue: '+esc(pasos[sig].t),cuerpo,'👋');
 }
 
 /* En materias de docente, el estudiante no puede editar el contenido compartido */

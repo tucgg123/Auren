@@ -943,3 +943,108 @@ h1.brand .logoImg{margin-right:2px}
 /* Celulares y efectos reducidos: sin desenfoque (backdrop-filter) la barra superior semitransparente dejaba ver
    el contenido de abajo encima del logo y del buscador. Ahí la barra va con fondo sólido. */
 html[data-fx="lite"] header#topbar,html[data-fx="off"] header#topbar{background:var(--bg)}
+
+/* ===== Cajones plegables en toda la app (empiezan cerrados) ===== */
+.dnum{font-size:17px}
+.dwHead{min-height:64px}
+.dwT small{display:block;line-height:1.35;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.dwAviso{flex:none;min-width:24px;height:24px;padding:0 7px;border-radius:99px;background:var(--a);color:var(--on);font:700 12px/24px var(--sans);text-align:center}
+.dw.open{border-color:var(--line2)}
+.dwHead:hover .dnum{transform:scale(1.06)}
+.dnum{transition:transform .15s}
+/* Lo que ya era una tarjeta con título queda "desnudo" dentro del cajón: el cajón ya lleva el título */
+.dwPad>.card,.dwPad>.shareBox{border:0;background:none;box-shadow:none;padding:0;margin:0!important;-webkit-backdrop-filter:none;backdrop-filter:none}
+.dwPad>.card>h3:first-child,.dwPad>.shareBox>b:first-child{display:none}
+.dwPad>.card>h3:first-child+p,.dwPad>.shareBox>b:first-child+p{margin-top:0!important}
+.dwPad .mcal{padding:0}
+.dwPad>.folder:last-of-type{margin-bottom:12px}
+.mv-stats .dw{margin:0}
+.mv-stats{gap:12px}
+@media(max-width:620px){
+  .dwHead{gap:12px;padding:14px 14px}
+  .dwPad{padding:14px 14px 16px}
+  .dnum{width:32px;height:32px}
+  .dwT b{font-size:16.5px}
+}
+
+/* ===== Estudiar: reto del día y actividades tipo juego ===== */
+.estudiarDw>.dw{border-color:var(--a);background:linear-gradient(145deg,var(--al),transparent 70%),var(--panel)}
+.reto{position:relative;border-radius:18px;padding:16px;margin:0 0 14px;background:linear-gradient(135deg,color-mix(in srgb,var(--a) 22%,transparent),color-mix(in srgb,#A99BE8 18%,transparent));border:1px solid color-mix(in srgb,var(--a) 45%,transparent)}
+.retoTop{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.retoK{font:700 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--a)}
+.retoTxt{margin:8px 0 10px;font:500 1.05em/1.4 var(--serif)}
+.retoRacha{display:flex;justify-content:space-between;font-size:13px;color:var(--m)}
+.retoRacha b{color:var(--t)}
+.reto .bar{margin:6px 0 12px}
+.retoBtn{width:100%;padding:12px 16px;font-size:1em}
+.actGrupo{margin-top:14px}
+.actGT{font:600 13px var(--sans);letter-spacing:.04em;color:var(--m);margin:0 0 8px}
+.actGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.act{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:14px 14px 12px;border-radius:16px;border:1px solid var(--line2);border-top:4px solid var(--ac);background:var(--card);color:inherit;min-height:118px}
+.act:hover,.act:focus-visible{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,var(--card))}
+.actIco{font-size:28px;line-height:1;margin-bottom:6px;display:inline-block}
+.act b{font:600 15.5px/1.2 var(--serif)}
+.act small{font-size:12px;line-height:1.35;color:var(--m)}
+.actN{position:absolute;top:10px;right:10px;min-width:24px;height:24px;padding:0 7px;border-radius:99px;background:var(--a);color:var(--on);font:700 12px/24px var(--sans);font-style:normal;text-align:center}
+@media(max-width:420px){.actGrid{grid-template-columns:1fr 1fr;gap:8px}.act{padding:12px 11px 10px;min-height:112px}.actIco{font-size:24px}.act b{font-size:14.5px}}
+@media (prefers-reduced-motion:no-preference){
+  .act{transition:transform .15s,border-color .2s,background .2s}
+  .act:hover{transform:translateY(-3px)}
+  .act:active{transform:scale(.97)}
+  .act:hover .actIco{animation:anWiggle .5s ease}
+  .actN{animation:anPop .5s ease}
+  @keyframes anWiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg) scale(1.1)}75%{transform:rotate(10deg) scale(1.1)}}
+}
+
+/* Marcador, estrellas y pantalla final */
+.marcador{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+.marcador .comboChip{margin:0;padding:3px 10px}
+.stars{display:flex;justify-content:center;gap:6px;margin:4px 0 2px;font-size:34px;line-height:1}
+.stars span{color:var(--b)}
+.stars span.on{color:#E8B04B;text-shadow:0 2px 10px rgba(232,176,75,.45)}
+.finBtns{justify-content:center;flex-wrap:wrap;margin-top:14px}
+@media (prefers-reduced-motion:no-preference){
+  .stars span.on{animation:anBadge .55s ease both;animation-delay:calc(.7s + var(--i)*.2s)}
+}
+.fcFace{position:absolute}
+.fcTag{position:absolute;top:12px;left:16px;font:700 10.5px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--m)}
+.fcBack .fcTag{color:var(--a)}
+.bar.tiempo{height:12px}
+.bar.tiempo i{background:linear-gradient(90deg,var(--no),#E8B04B 30%,var(--ok));transition:width 1s linear}
+.reloj b{font:600 1.2em var(--sans);color:var(--t);font-variant-numeric:tabular-nums}
+
+/* Memorizar: respuesta tapada */
+.memoList{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.memo{border:1px solid var(--line2);border-radius:16px;padding:14px;background:var(--card);border-left:4px solid var(--line2)}
+.memo.bien{border-left-color:var(--ok)}.memo.mal{border-left-color:var(--no)}
+.memoQ{display:block;font:600 1em/1.35 var(--serif);margin-bottom:8px}
+.memoA{display:block;width:100%;text-align:left;border:1px dashed var(--line2);border-radius:12px;padding:10px 12px;background:repeating-linear-gradient(-45deg,var(--hover),var(--hover) 8px,transparent 8px,transparent 16px);color:var(--m);font-weight:600}
+.memoA .memoTxt{display:none}
+.memo.ver .memoA{background:var(--al);border-style:solid;border-color:var(--a);color:var(--t);font-weight:400}
+.memo.ver .memoA .memoTapa{display:none}.memo.ver .memoA .memoTxt{display:block}
+.memoYo{display:none;gap:8px;margin-top:8px;flex-wrap:wrap}
+.memo.ver .memoYo{display:flex}
+.memo.bien .memoYo [data-ok="1"],.memo.mal .memoYo [data-ok="0"]{border-color:var(--a);background:var(--al)}
+
+/* ¿Qué concepto? */
+.conceptoDef{font-size:1.15em;line-height:1.4}
+.pistaBox{margin:4px 0 12px;font-size:14px;color:var(--m)}
+.pistaBox b{font-family:var(--sans);letter-spacing:.08em;color:var(--t)}
+
+/* Emparejar */
+.empGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.empCol{display:flex;flex-direction:column;gap:8px}
+.empT{display:block;width:100%;min-height:58px;text-align:left;padding:10px 12px;border-radius:14px;border:1px solid var(--line2);background:var(--panel);color:var(--t);font-size:13.5px;line-height:1.35;overflow-wrap:anywhere}
+.empT.izq{font-weight:600;font-family:var(--serif);font-size:14.5px}
+.empT.der{font-size:12.5px;color:var(--t)}
+.empT.sel{border-color:var(--a);background:var(--al);box-shadow:0 0 0 3px var(--glow)}
+.empT.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 16%,transparent);cursor:default}
+.empT.no{border-color:var(--no);background:color-mix(in srgb,var(--no) 16%,transparent)}
+.empT.hecha{opacity:.35}
+@media (prefers-reduced-motion:no-preference){
+  .empT{transition:opacity .35s,transform .15s,background .2s,border-color .2s}
+  .empT.sel{transform:scale(1.02)}
+  .empT.ok.pop{animation:anFlashOk .5s ease,anPop .45s ease}
+  .empT.shake{animation:anShake .5s ease}
+}
+.estudiarDw .practice+p.meta{font-size:12px;line-height:1.45}

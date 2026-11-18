@@ -90,7 +90,8 @@ document.addEventListener('click',async e=>{
     const sec=b.closest('.dw');if(!sec)return;
     const abrir=!sec.classList.contains('open');
     sec.classList.toggle('open',abrir);b.setAttribute('aria-expanded',String(abrir));
-    ui.semDr=ui.semDr||{1:true,2:false};ui.semDr[b.dataset.n]=abrir;
+    ui.dw=ui.dw||{};ui.dw[b.dataset.k]=abrir;
+    if(abrir)requestAnimationFrame(()=>{fitCards(sec);layoutRadials(sec)});
   }
   else if(a==='backMaterias'){
     const mm=route.materiaId&&state.materias.find(x=>x.id===route.materiaId);
@@ -229,13 +230,48 @@ document.addEventListener('click',async e=>{
     else render();
   }
   else if(a==='falleStart'){comenzarFalle(b.dataset.modo,b.dataset.tema)}
+  else if(a==='memoVer'){
+    const box=b.closest('.memo');if(!box)return;
+    const ver=!box.classList.contains('ver');box.classList.toggle('ver',ver);b.setAttribute('aria-expanded',String(ver));
+  }
+  else if(a==='memoYo'&&toolState){
+    const box=b.closest('.memo');if(!box)return;
+    const ok=b.dataset.ok==='1';toolState.memo=toolState.memo||{};toolState.memo[b.dataset.i]=ok?1:0;
+    box.classList.add('ver');box.classList.toggle('bien',ok);box.classList.toggle('mal',!ok);
+    const cu=$('memoCuenta');if(cu)cu.textContent=memoCuentaTxt();
+    const br=$('memoBar');if(br)br.style.width=Math.round(Object.keys(toolState.memo).length/toolState.cards.length*100)+'%';
+    if(ok&&!reducido())explotar(b);
+  }
+  else if(a==='conceptoPista'&&toolState&&toolState.qs){toolState.pista=true;render(true)}
+  else if(a==='conceptoRevelar'&&toolState&&toolState.qs){toolState.flipped=true;render(true)}
+  else if((a==='conceptoOpt'||a==='conceptoAuto')&&toolState&&toolState.qs){
+    const q=toolState.qs[toolState.idx];if(!q||q.sel!=null)return;
+    const correcta=limpioT(q.card.front);
+    const ok=a==='conceptoOpt'?q.opts[+b.dataset.i]===correcta:b.dataset.ok==='1';
+    q.sel=a==='conceptoOpt'?q.opts[+b.dataset.i]:(ok?correcta:'');
+    if(ok)toolState.score++;
+    toolState.combo=ok?(toolState.combo||0)+1:0;toolState.mejor=Math.max(toolState.mejor||0,toolState.combo);
+    const real=state.cards.find(x=>x.id===q.card.id);
+    if(real){real.known=ok;repasarTarjeta(real,ok);persist()}
+    if(a==='conceptoAuto'){toolState.idx++;toolState.pista=false;toolState.flipped=false;if(toolState.idx>=toolState.qs.length){toolState.fxFin=true;toolState.fxPct=toolState.score/toolState.qs.length}}
+    else toolState.fx={tipo:ok?'ok':'no'};
+    render(a==='conceptoOpt');
+  }
+  else if(a==='conceptoNext'&&toolState&&toolState.qs){
+    toolState.idx++;toolState.pista=false;toolState.flipped=false;
+    if(toolState.idx>=toolState.qs.length){toolState.fxFin=true;toolState.fxPct=toolState.score/toolState.qs.length}
+    render();
+  }
+  else if(a==='empPick'){empPick(b)}
   else if(a==='cardAnswer'){
     const know=b.dataset.know==='1';
-    const c=toolState.cards[toolState.idx];
-    const real=state.cards.find(x=>x.id===c.id);
+    const c=toolState.cards[toolState.idx%toolState.cards.length];
+    const real=c&&state.cards.find(x=>x.id===c.id);
     if(real){real.known=know;repasarTarjeta(real,know,b.dataset.cal||'bien');persist();avisarLogros(evaluarLogros());}
     toolState.seen++;if(know)toolState.known++;
+    toolState.combo=know?(toolState.combo||0)+1:0;toolState.mejor=Math.max(toolState.mejor||0,toolState.combo);
     toolState.idx++;toolState.flipped=false;
+    if(route.tool!=='repaso'&&toolState.idx>=toolState.cards.length){toolState.fxFin=true;toolState.fxPct=toolState.seen?toolState.known/toolState.seen:0}
     render();
   }
   else if(a==='answerQuiz'||a==='answerHueco'){

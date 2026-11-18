@@ -7,7 +7,7 @@ document.querySelectorAll('#mainNav [data-nav]').forEach(b=>b.onclick=()=>{
 /* ======================= Navegación con URL =======================
    Cada pantalla tiene su dirección (#/materia/ID, #/estudio/quiz/ID …). Así el botón "atrás" del celular o del navegador
    vuelve a la pantalla anterior en vez de cerrar la app, y se puede recargar o compartir el enlace de una materia. */
-const HERRAMIENTAS=['flashcards','memorizar','quiz','examen','escrito','concepto','hoy','falle','repaso','comparar','progreso','referencias'];
+const HERRAMIENTAS=['flashcards','memorizar','quiz','examen','escrito','concepto','emparejar','hoy','falle','repaso','comparar','progreso','referencias'];
 function rutaAHash(r){
   const v=r.view;
   if(v==='materias'&&r.semId)return '#/semestre/'+r.semId;
