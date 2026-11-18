@@ -45,7 +45,7 @@ Netlify publica la carpeta tal cual (no ejecuta el build).
 - Al borrar una cuenta de estudiante, sus entregas de exámenes quedan en la materia del profesor (registro académico).
 - El lector de voz usa las voces del dispositivo; su calidad depende del equipo. No se envía texto a ningún servidor.
 - Las notificaciones del Pomodoro suenan/avisan con la app abierta o en segundo plano; con el navegador cerrado no hay aviso (haría falta un servidor de notificaciones push).
-- La política de contenido (CSP) sigue en modo de solo reporte.
+- La política de contenido (CSP) ya se aplica (está en `netlify.toml`). Si agregas una librería o servicio de otro dominio, hay que añadir ese dominio a la política o el navegador lo bloqueará.
 
 ## Lo que NO se pudo probar aquí
 Se probó con simulaciones del navegador y de la base de datos (cientos de comprobaciones automáticas), pero **no** contra Firebase ni un navegador reales. Hay que confirmar a mano: las reglas de Firestore publicadas, el inicio de sesión y la recarga del rol, la compresión de imágenes y de PDF (dibujan en un canvas real), la voz, el aspecto en celular y escritorio, y el borrado real de cuentas con la cuenta de servicio.

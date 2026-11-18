@@ -30,7 +30,12 @@
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
     Cross-Origin-Opener-Policy = "same-origin-allow-popups"
-    # Política de contenido en modo SOLO REPORTE: no bloquea nada, solo anota en la consola del navegador (F12)
-    # lo que bloquearía. Cuando pruebes login con Google, subir un PDF y usar la app sin avisos, cambia el nombre
-    # de la cabecera a "Content-Security-Policy" para que se aplique de verdad.
-    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://cdn.jsdelivr.net; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com https://www.youtube-nocookie.com https://player.vimeo.com; worker-src 'self' blob: https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    # Política de contenido (CSP), ya aplicada de verdad. Qué permite y por qué:
+    #   script-src  gstatic (SDK de Firebase), apis.google.com (login con Google), jsdelivr (pdf.js), cdnjs (JSZip)
+    #   connect-src *.googleapis.com (Auth, Firestore, Storage); gstatic, jsdelivr, cdnjs y Google Fonts porque
+    #               el service worker descarga y guarda en caché esas librerías con fetch()
+    #   frame-src   ventana de login de Firebase/Google y videos de YouTube (nocookie) y Vimeo
+    #   worker-src  blob: y jsdelivr para el worker de pdf.js
+    # Gemini no aparece: la app lo llama solo a través de /.netlify/functions (mismo origen).
+    # Si algo deja de cargar, la consola del navegador (F12) dirá qué dominio bloqueó la política.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://www.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com https://www.youtube-nocookie.com https://player.vimeo.com; worker-src 'self' blob: https://cdn.jsdelivr.net; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
