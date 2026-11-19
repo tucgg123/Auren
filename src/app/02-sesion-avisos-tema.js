@@ -73,6 +73,7 @@ auth.onAuthStateChanged(async user=>{
     $('authLoading').hidden=true;
     $('authScreen').hidden=true;
     $('appRoot').hidden=false;
+    if(!state.theme&&temaLocal()){state.theme=temaLocal();persist()}   // lo elegido antes de iniciar sesión pasa a la cuenta
     applyTheme();updateThemeBtn();
     route={view:esProfesor()?'docente':'materias',materiaId:null};
     rutaInicialDesdeHash();
@@ -223,12 +224,32 @@ document.addEventListener('click',e=>{
 });
 
 /* ================= TEMA CLARO/OSCURO ================= */
+/* La preferencia se guarda en la cuenta (state.theme) y también en este dispositivo (localStorage), para que
+   tema-init.js la aplique antes de pintar, incluso en la pantalla de acceso. Sin preferencia se sigue la del sistema. */
+const TEMA_KEY='auren_tema';
+const mqOscuro=typeof matchMedia==='function'?matchMedia('(prefers-color-scheme: dark)'):null;
+const temaEfectivo=()=>state.theme||(mqOscuro&&mqOscuro.matches?'dark':'light');
+function temaLocal(){try{const t=localStorage.getItem(TEMA_KEY);return t==='light'||t==='dark'?t:null}catch(e){return null}}
 function applyTheme(){
   if(state.theme)document.documentElement.setAttribute('data-theme',state.theme);
   else document.documentElement.removeAttribute('data-theme');
+  try{state.theme?localStorage.setItem(TEMA_KEY,state.theme):localStorage.removeItem(TEMA_KEY)}catch(e){}
+  const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.setAttribute('content',temaEfectivo()==='dark'?'#060a12':'#f1f5fa');
   applyFx();
 }
-function updateThemeBtn(){$('themeBtn').textContent=state.theme==='dark'?'🌙 Tema oscuro':state.theme==='light'?'☀️ Tema claro':'🌗 Tema automático'}
+function updateThemeBtn(){
+  $('themeBtn').textContent=state.theme==='dark'?'🌙 Tema oscuro':state.theme==='light'?'☀️ Tema claro':'🌗 Tema automático (del sistema)';
+  const b=$('themeTgl');if(!b)return;
+  const osc=temaEfectivo()==='dark',txt=osc?'Cambiar a modo claro':'Cambiar a modo oscuro';
+  b.querySelector('.tgIco').textContent=osc?'☀️':'🌙';
+  b.setAttribute('aria-label',txt);b.title=txt;
+}
+/* Botón del encabezado: alterna claro ↔ oscuro y lo deja guardado */
+$('themeTgl').onclick=()=>{
+  state.theme=temaEfectivo()==='dark'?'light':'dark';
+  applyTheme();updateThemeBtn();if(currentUid)persist();
+};
+if(mqOscuro){const f=()=>{if(!state.theme){applyTheme();updateThemeBtn()}};mqOscuro.addEventListener?mqOscuro.addEventListener('change',f):mqOscuro.addListener&&mqOscuro.addListener(f)}
 /* Efectos visuales (fondo animado y desenfoques). Automático: ligeros en pantallas pequeñas o equipos con poca memoria/procesador, sin efectos si pides reducir movimiento */
 function fxAuto(){
   const reduce=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion:reduce)').matches;
@@ -262,7 +283,7 @@ function cargarFondo(v){
     fx.insertAdjacentHTML('afterbegin',t);
   }).catch(()=>{fondoPedido=false});
 }
-applyFx();      // también en la pantalla de acceso, antes de iniciar sesión
+state.theme=temaLocal();applyTheme();updateThemeBtn();   // también en la pantalla de acceso, antes de iniciar sesión (aplica los efectos)
 document.addEventListener('visibilitychange',()=>document.documentElement.classList.toggle('fxPause',document.hidden));
 function datosCardHTML(){
   return `<div class="card"><h3>💾 Tus datos</h3>
