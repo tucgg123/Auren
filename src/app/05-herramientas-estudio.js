@@ -71,11 +71,14 @@ function estudiarCajonHTML(m){
   const grupos=GRUPOS_ACT.map(([g,tit,col])=>`<div class="actGrupo"><h3 class="actGT">${tit}</h3><div class="actGrid">${ACTIVIDADES.filter(a=>a.g===g).map(a=>`<button type="button" class="act" style="--ac:${col}" data-action="openTool" data-tool="${a.t}" data-mat="${id}"><span class="actIco" aria-hidden="true">${a.ico}</span><b>${a.n}</b><small>${a.d}</small>${cuenta[a.t]?`<em class="actN" aria-label="${cuenta[a.t]} pendientes">${cuenta[a.t]}</em>`:''}</button>`).join('')}</div></div>`).join('');
   const k='m:'+id+':est',ab=dwAbierto(k),bid='dwB-'+k.replace(/[^\w-]/g,'_');
   const go=nH?{t:'hoy',l:'Empezar · '+nH+' para hoy'}:reto.t?{t:reto.t,l:'Empezar · '+nombreAct(reto.t)}:null;
+  const hoyS=hoyStr(),hechas=getCardsTodas(id).filter(c=>c.last===hoyS).length,totHoy=hechas+nH;   // repasadas hoy + las que faltan
+  const prog=totHoy?`<div class="ehProg"><div class="ehPl"><span>Progreso de hoy</span><span>${hechas} de ${totHoy}${hechas>=totHoy?' ✓':''}</span></div><div class="bar" role="progressbar" aria-label="Progreso de hoy" aria-valuemin="0" aria-valuemax="${totHoy}" aria-valuenow="${hechas}"><i style="width:${Math.round(hechas/totHoy*100)}%"></i></div></div>`:'';
   return `<section class="dw estHero${ab?' open':''}" data-key="dw-${esc(k)}">
     <div class="ehTop">
       <button type="button" class="dwHead ehHead" data-action="toggleDw" data-k="${esc(k)}" aria-expanded="${ab}" aria-controls="${bid}"><span class="dnum ehIco" aria-hidden="true">${IC_DIANA}</span><span class="dwT"><b>Estudiar</b><small>${pluralMv(nC,'tarjeta','tarjetas')} · ${ACTIVIDADES.length} actividades${nH?' · '+nH+' para hoy':''}</small></span><span class="chev" aria-hidden="true">▼</span></button>
       ${go?`<button type="button" class="pr ehGo" data-action="openTool" data-tool="${go.t}" data-mat="${id}">${esc(go.l)}</button>`:''}
     </div>
+    ${prog}
     <div class="dwBody" id="${bid}"><div class="dwInner"><div class="dwPad">${retoHTML}${alcanceHTML(id)}${grupos}</div></div></div>
   </section>`;
 }
