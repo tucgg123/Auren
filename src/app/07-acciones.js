@@ -234,6 +234,7 @@ document.addEventListener('click',async e=>{
   else if(a==='openTool'){startTool(b.dataset.tool,b.dataset.mat);}
   else if(a==='quizStart'){comenzarQuiz()}
   else if(a==='quizTiposChip'&&toolState&&toolState.setup){toolState.tipos=b.dataset.v;ui.quizCfg[route.materiaId].tipos=toolState.tipos;render(true)}
+  else if(a==='quizDifChip'&&toolState&&toolState.setup&&DIF_EST.some(d=>d[0]===b.dataset.v)){toolState.dif=b.dataset.v;ui.quizCfg[route.materiaId].dif=toolState.dif;guardarDifEst(toolState.dif);render(true)}
   else if(a==='redoTool'){startTool(route.tool,route.materiaId);}
   else if(a==='flipCard'){
     toolState.flipped=!toolState.flipped;

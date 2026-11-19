@@ -117,40 +117,71 @@ function tarjetasDelCorte(materiaId,corteId,temaId){
 }
 /* ---------- Preguntas: opción múltiple, verdadero/falso y completar ---------- */
 const limpioT=s=>String(s==null?'':s).trim();
-/* 3 opciones incorrectas: primero las que escribió la IA para esa tarjeta; si faltan, respuestas de otras tarjetas del mismo grupo (corte) */
-function distractoresDe(c,pool){
-  const correcta=limpioT(c.back);
-  const ia=[...new Set((c.dist||[]).map(limpioT).filter(x=>x&&x!==correcta))];
-  if(ia.length>=3)return shuffle(ia).slice(0,3);
-  const otros=[...new Map((pool||[]).filter(x=>limpioT(x.back)&&limpioT(x.back)!==correcta).map(x=>[limpioT(x.back),limpioT(x.back)])).values()].filter(x=>!ia.includes(x));
-  const todos=ia.concat(shuffle(otros));
-  return todos.length>=3?todos.slice(0,3):null;
+/* ---------- Dificultad elegida por el estudiante ----------
+   facil: 3 opciones (2 incorrectas) y se priorizan las tarjetas fáciles.
+   media: 4 opciones, como siempre.
+   dificil: 4 opciones con las incorrectas más parecidas a la correcta (largo y palabras) y se priorizan las tarjetas difíciles.
+   mixta: 4 opciones y tarjetas de todos los niveles. */
+const DIF_EST=[['facil','🌱 Fácil'],['media','⚖️ Media'],['dificil','🔥 Difícil'],['mixta','🎲 Mixta']];
+const DIF_EST_TXT={facil:'3 opciones por pregunta y primero las tarjetas más sencillas.',media:'4 opciones por pregunta.',dificil:'4 opciones muy parecidas entre sí y primero las tarjetas más difíciles.',mixta:'4 opciones y tarjetas de todos los niveles.'};
+const nivelCard=c=>['facil','media','dificil'].includes(c&&c.dif)?c.dif:'media';
+/* Todas las opciones se muestran con el mismo formato (sin espacios dobles ni punto final), así ninguna se delata por la puntuación */
+const fmtOpcion=s=>{const t=limpioT(s).replace(/\s+/g,' ').replace(/[.;,]+$/,'').trim();return t?t.charAt(0).toUpperCase()+t.slice(1):t};
+const palabrasDe=s=>new Set(normTxt(s).split(' ').filter(w=>w.length>3));
+function parecido(a,b){const A=palabrasDe(a),B=palabrasDe(b);if(!A.size||!B.size)return 0;let n=0;A.forEach(w=>{if(B.has(w))n++});return n/(A.size+B.size-n)}
+/* Opciones incorrectas (2 en fácil, 3 en las demás). Se escogen entre las que escribió la IA para esa tarjeta y las respuestas
+   de otras tarjetas del mismo grupo (corte), prefiriendo las de LARGO PARECIDO a la correcta: así la respuesta correcta
+   deja de ser siempre la más larga. En difícil además pesan las que comparten palabras con la correcta. */
+function distractoresDe(c,pool,dif){
+  const correcta=fmtOpcion(c.back),L=Math.max(1,correcta.length),n=dif==='facil'?2:3;
+  const vistos=new Set([normTxt(correcta)]),cand=[];
+  const agregar=(x,ia)=>{const t=fmtOpcion(x),k=normTxt(t);if(!t||!k||vistos.has(k))return;vistos.add(k);cand.push({t,ia})};
+  (c.dist||[]).forEach(x=>agregar(x,true));
+  shuffle((pool||[]).slice()).forEach(x=>agregar(x.back,false));
+  if(cand.length<n)return null;
+  cand.forEach(o=>{
+    const dl=Math.abs(o.t.length-L)/L;                                        // 0 = mismo largo
+    o.p=dl+(o.ia?0:0.25)+Math.random()*0.15-(dif==='dificil'?parecido(o.t,correcta)*1.5:0);
+  });
+  cand.sort((a,b)=>a.p-b.p);
+  const elegidas=cand.slice(0,n),resto=cand.slice(n);
+  /* Si aun así la correcta quedó como la más larga (y por bastante), se cambia la incorrecta más corta por otra más larga que sí exista */
+  const masLarga=Math.max(...elegidas.map(o=>o.t.length));
+  if(correcta.length>masLarga*1.15){
+    const otra=resto.filter(o=>o.t.length>=correcta.length*0.85&&o.t.length<=correcta.length*1.6).sort((a,b)=>a.p-b.p)[0];
+    if(otra){let iMin=0;elegidas.forEach((o,i)=>{if(o.t.length<elegidas[iMin].t.length)iMin=i});elegidas[iMin]=otra}
+  }
+  return elegidas.map(o=>o.t);
 }
 /* tipos: 'mixto' (variadas), 'mc' (opción múltiple), 'vf' (verdadero o falso) o 'hueco' (completar).
    Verdadero o falso usa la afirmación falsa de la tarjeta o, si no tiene, una de sus opciones incorrectas.
    Completar solo existe en tarjetas que traen la frase con el hueco; en las demás se pregunta con opción múltiple. */
 const tieneHueco=c=>!!(c.hueco&&limpioT(c.hueco.r)&&String(c.hueco.o||'').includes('____'));
-function tipoPara(c,tipos){
+function tipoPara(c,tipos,dif){
   if(tipos==='mc')return 'mc';
   if(tipos==='vf')return 'vf';
   if(tipos==='hueco')return tieneHueco(c)?'hueco':'mc';
   const op=['mc','mc','vf'];                                                                // la opción múltiple pesa más
-  if(tieneHueco(c))op.push('hueco','hueco');
+  if(dif==='facil')op.push('vf');                                                           // en fácil sale más verdadero o falso
+  if(tieneHueco(c))op.push(...(dif==='dificil'?['hueco','hueco','hueco']:dif==='facil'?['hueco']:['hueco','hueco']));   // y en difícil más completar
   return op[Math.floor(Math.random()*op.length)];
 }
-function preguntaDe(c,d,tipos){
-  const tipo=tipoPara(c,tipos);
+function preguntaDe(c,d,tipos,dif){
+  const tipo=tipoPara(c,tipos,dif);
   const falsa=limpioT(c.falsa)&&limpioT(c.falsa)!==limpioT(c.back)?c.falsa:d[0];
-  if(tipo==='vf'){const v=Math.random()<0.5;return{card:c,tipo,enun:c.front,afirm:v?c.back:falsa,correcta:v?'Verdadero':'Falso',options:['Verdadero','Falso'],selected:null}}
+  if(tipo==='vf'){const v=Math.random()<0.5;return{card:c,tipo,enun:c.front,afirm:fmtOpcion(v?c.back:falsa),correcta:v?'Verdadero':'Falso',options:['Verdadero','Falso'],selected:null}}
   if(tipo==='hueco')return{card:c,tipo,enun:c.hueco.o,correcta:c.hueco.r,options:[],selected:null};
-  return{card:c,tipo:'mc',enun:c.front,correcta:c.back,options:shuffle([c.back,...d]),selected:null};
+  const correcta=fmtOpcion(c.back);
+  return{card:c,tipo:'mc',enun:c.front,correcta,options:shuffle([correcta,...d]),selected:null};
 }
 function armarPreguntas(cards,n,opts){
   opts=opts||{};
   const validas=cards.filter(c=>limpioT(c.front)&&limpioT(c.back));
   const poolDe=opts.poolDe||(()=>validas);
-  const lista=[];
-  shuffle(validas).forEach(c=>{const d=distractoresDe(c,poolDe(c));if(d)lista.push(preguntaDe(c,d,opts.tipos))});
+  const dif=opts.dif||'media',lista=[];
+  /* Con una dificultad elegida van primero las tarjetas de ese nivel, luego las del nivel vecino y al final las demás */
+  const lejania=c=>{if(dif==='mixta')return 0;const o=['facil','media','dificil'],a=o.indexOf(nivelCard(c)),b=o.indexOf(dif);return Math.abs(a-b)};
+  shuffle(validas).sort((a,b)=>lejania(a)-lejania(b)).forEach(c=>{const d=distractoresDe(c,poolDe(c),dif);if(d)lista.push(preguntaDe(c,d,opts.tipos,dif))});
   if(!lista.length)return null;
   return n>0?lista.slice(0,n):lista;
 }
@@ -181,8 +212,11 @@ function quizCfgDe(materiaId,tool){
   if(cfg.n[tool]==null)cfg.n[tool]=tool==='examen'?0:10;   // 0 = todas las tarjetas del corte
   if(cfg.temaId&&!state.temas.some(x=>x.id===cfg.temaId&&x.corteId===cfg.corteId))cfg.temaId='';
   if(!cfg.tipos)cfg.tipos='mixto';                       // mixto = opción múltiple + verdadero/falso + completar
-  return{corteId:cfg.corteId,n:cfg.n[tool],tipos:cfg.tipos,temaId:cfg.temaId||''};
+  if(!cfg.dif)cfg.dif=leerDifEst();                       // la última dificultad que eligió el estudiante
+  return{corteId:cfg.corteId,n:cfg.n[tool],tipos:cfg.tipos,temaId:cfg.temaId||'',dif:cfg.dif};
 }
+function leerDifEst(){try{const v=localStorage.getItem('auren_dif');return DIF_EST.some(d=>d[0]===v)?v:'media'}catch(e){return'media'}}
+function guardarDifEst(v){try{localStorage.setItem('auren_dif',v)}catch(e){}}
 function comenzarQuiz(){
   if(!toolState||!toolState.setup)return;
   const materiaId=route.materiaId,corteId=toolState.corteId;
@@ -194,7 +228,7 @@ function comenzarQuiz(){
     toolState={questions:lista,idx:0,score:0,corteId,escrito:true};
     render();return;
   }
-  const questions=armarPreguntas(cards,toolState.n,{tipos:toolState.tipos});
+  const questions=armarPreguntas(cards,toolState.n,{tipos:toolState.tipos,dif:toolState.dif});
   if(!questions){toolState.error='No hay suficiente material en este corte para armar el examen.';render(true);return}
   ui.quizCfg[materiaId].corteId=corteId;
   toolState={questions,idx:0,score:0,corteId};
@@ -207,7 +241,7 @@ function quizSetupHTML(isExam,escrito){
   const cards=tarjetasDelCorte(m.id,toolState.corteId,toolState.temaId);
   const distintas=new Set(cards.map(c=>String(c.back).trim())).size;
   const temas=state.temas.filter(x=>x.materiaId===m.id&&x.corteId===toolState.corteId);
-  const hay=escrito?cards.length>0:!!armarPreguntas(cards,1,{tipos:'mc'});     // con opciones incorrectas de la IA basta con menos tarjetas
+  const hay=escrito?cards.length>0:!!armarPreguntas(cards,1,{tipos:'mc',dif:toolState.dif});     // con opciones incorrectas de la IA basta con menos tarjetas
   const temasCorte=state.temas.filter(x=>x.materiaId===m.id&&x.corteId===toolState.corteId);
   const dh=progresoHoy(),hoyN=state.progress.days.includes(fechaLocal(new Date()))?Math.max(dh.racha,META_RACHA):dh.racha;
   const opcionesN=[10,20,30,50].filter(x=>x<cards.length);
@@ -224,7 +258,10 @@ function quizSetupHTML(isExam,escrito){
     <select class="fld" id="quizN" data-action="quizN">${opcionesN.map(x=>`<option value="${x}" ${toolState.n===x?'selected':''}>${x}</option>`).join('')}<option value="0" ${toolState.n===0||toolState.n>=cards.length?'selected':''}>Todas (${cards.length})</option></select>
     ${escrito?'':`<label class="lbl" for="quizTipos">Tipos de pregunta</label>
     <div class="tipoChips" role="group" aria-label="Tipos de pregunta">${TIPOS_PREG.map(([k,l])=>`<button type="button" class="tChip${toolState.tipos===k?' on':''}" data-action="quizTiposChip" data-v="${k}" aria-pressed="${toolState.tipos===k}">${l}</button>`).join('')}</div>
-    ${toolState.tipos==='hueco'&&!cards.some(tieneHueco)?'<p class="meta" style="margin:6px 0 0">Las tarjetas de este corte no traen frases para completar: se preguntarán con opción múltiple.</p>':''}`}
+    ${toolState.tipos==='hueco'&&!cards.some(tieneHueco)?'<p class="meta" style="margin:6px 0 0">Las tarjetas de este corte no traen frases para completar: se preguntarán con opción múltiple.</p>':''}
+    <label class="lbl">Dificultad</label>
+    <div class="tipoChips" role="group" aria-label="Dificultad">${DIF_EST.map(([k,l])=>`<button type="button" class="tChip${toolState.dif===k?' on':''}" data-action="quizDifChip" data-v="${k}" aria-pressed="${toolState.dif===k}">${l}</button>`).join('')}</div>
+    <p class="meta" style="margin:6px 0 0">${DIF_EST_TXT[toolState.dif]||''}${(()=>{if(toolState.dif==='mixta'||toolState.dif==='media')return'';const k=cards.filter(c=>nivelCard(c)===toolState.dif).length;return k<cards.length?' Este corte tiene '+k+' tarjeta'+(k==1?'':'s')+' de ese nivel; si pides más preguntas, se completan con las de otros niveles.':''})()}</p>`}
     <div class="premio" style="margin-top:14px"><b>🔥 Racha de hoy: ${hoyN}/${META_RACHA} preguntas</b>
       <div class="bar"><i style="width:${Math.min(100,Math.round(hoyN/META_RACHA*100))}%"></i></div>
       <p class="meta" style="margin:6px 0 0">Las primeras ${META_RACHA} preguntas del día aseguran tu racha. Las demás cuentan como práctica extra: puedes hacer todas las que quieras y quedan en tu historial.</p></div>
@@ -371,7 +408,7 @@ function startTool(tool,materiaId){
   }else if(tool==='quiz'||tool==='examen'||tool==='escrito'){
     /* El examen se arma con UN corte elegido (ver comenzarQuiz): nunca mezcla cortes ni materias */
     const cfg=quizCfgDe(materiaId,tool);
-    toolState={setup:true,corteId:cfg.corteId,n:cfg.n,tipos:cfg.tipos,temaId:cfg.temaId,error:''};
+    toolState={setup:true,corteId:cfg.corteId,n:cfg.n,tipos:cfg.tipos,temaId:cfg.temaId,dif:cfg.dif,error:''};
   }else if(tool==='hoy'){
     toolState={cards:sesionHoy(materiaId),idx:0,flipped:false,known:0,seen:0};
   }else if(tool==='falle'){

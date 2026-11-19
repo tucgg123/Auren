@@ -461,9 +461,9 @@ function generarPreguntas(m,temaIds,n,opts){
       const verdadera=Math.random()<0.5,afirm=verdadera?String(k.back).trim():String(k.falsa).trim();
       out.push({...base,tipo:'vf',enunciado:'Verdadero o falso. '+String(k.front).trim()+': «'+afirm+'»',opciones:['Verdadero','Falso','',''],correcta:verdadera?0:1});return;
     }
-    const correcta=String(k.back).trim();
-    let otras=distractoresDe(k,cardsCorte);                  // primero las opciones incorrectas que hizo la IA
-    if(!otras)otras=mezclar(pool.filter(b=>b!==correcta)).slice(0,3);
+    const correcta=fmtOpcion(k.back);
+    let otras=distractoresDe(k,cardsCorte,nivel(k)==='dificil'?'dificil':'media');   // de largo parecido a la correcta; en las difíciles, también parecidas en contenido
+    if(!otras)otras=mezclar(pool.map(fmtOpcion).filter(b=>b&&normTxt(b)!==normTxt(correcta))).slice(0,3);
     if(!otras.length)return;                       // sin otras respuestas no se puede armar opción múltiple
     const ops=mezclar([correcta,...otras]);
     out.push({...base,tipo:'mc',enunciado:String(k.front).trim(),opciones:[0,1,2,3].map(i=>ops[i]||''),correcta:ops.indexOf(correcta)});
