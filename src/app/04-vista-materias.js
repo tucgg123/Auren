@@ -437,9 +437,10 @@ function temaBlock(t){
   const hasSec=Array.isArray(t.secciones);
   let tab=ui.tab[t.id]||'contenido';
   if(tab==='esquema'&&!hasSec)tab='contenido';
-  const conApuntes=!esProfesor()&&(state.materias.find(x=>x.id===t.materiaId)||{}).rol==='estudiante';
+  /* El admin ve también "Mis apuntes" y "Pregúntale" en cualquier tema, para probar que todo funcione */
+  const conApuntes=esAdmin()||(!esProfesor()&&(state.materias.find(x=>x.id===t.materiaId)||{}).rol==='estudiante');
   if(tab==='apuntes'&&!conApuntes)tab='contenido';
-  const conChat=!esProfesor();
+  const conChat=esAdmin()||!esProfesor();
   if(tab==='chat'&&!conChat)tab='contenido';
   const tabs=[['contenido','Contenido'],...(hasSec?[['esquema','Esquema']]:[]),['tarjetas',`Tarjetas <span class="chip">${cards.length}</span>`],...(conApuntes?[['apuntes','📝 Mis apuntes']]:[]),...(conChat?[['chat','🤖 Pregúntale']]:[])];
   return `<details class="s" data-tema="${t.id}" ${ui.open[t.id]?'open':''}>
