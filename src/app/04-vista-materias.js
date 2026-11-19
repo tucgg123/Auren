@@ -33,9 +33,9 @@ function folderSemestreHTML(sem){
    Así la pantalla muestra solo los títulos (con un resumen corto) y cada quien abre lo que necesita.
    Lo abierto se recuerda en memoria (ui.dw) mientras la app esté abierta; al volver a entrar, todo empieza cerrado.
    k: clave única · titulo y sub: texto ya escapado · ico: emoji o número · aviso: número opcional que resalta algo pendiente */
-const dwAbierto=k=>{ui.dw=ui.dw||{};return !!ui.dw[k]};
-function dwHTML(k,titulo,sub,cuerpo,ico,aviso){
-  const ab=dwAbierto(k),id='dwB-'+String(k).replace(/[^\w-]/g,'_');
+const dwAbierto=(k,def)=>{ui.dw=ui.dw||{};return k in ui.dw?!!ui.dw[k]:!!def};
+function dwHTML(k,titulo,sub,cuerpo,ico,aviso,def){
+  const ab=dwAbierto(k,def),id='dwB-'+String(k).replace(/[^\w-]/g,'_');
   return `<section class="dw${ab?' open':''}" data-key="dw-${esc(k)}">
     <button type="button" class="dwHead" data-action="toggleDw" data-k="${esc(k)}" aria-expanded="${ab}" aria-controls="${id}"><span class="dnum" aria-hidden="true">${ico}</span><span class="dwT"><b>${titulo}</b>${sub?`<small>${sub}</small>`:''}</span>${aviso?`<span class="dwAviso">${aviso}</span>`:''}<span class="chev" aria-hidden="true">▼</span></button>
     <div class="dwBody" id="${id}"><div class="dwInner"><div class="dwPad">${cuerpo}</div></div></div>
@@ -147,8 +147,10 @@ function matStatsHTML(nSem,mats){
 }
 
 /* ================= VISTA: DETALLE DE MATERIA =================
-   Se organiza en zonas con título: "De tu docente" (exámenes, anuncios y documentos originales), "Tu estudio"
-   (Estudiar como tarjeta principal y el promedio) y "Cortes y temas" (cortes como pestañas de carpeta: uno abierto a la vez). */
+   Arriba la ruta (← Mis materias / Semestre) y el título con un resumen en pastillas (temas, tarjetas, para hoy, promedio).
+   Luego dos zonas: "Tu estudio" (Estudiar con la barra de progreso de hoy y, al lado, los exámenes del profesor) y
+   "Material y notas" (cajones en cuadrícula: cortes y temas, documentos, anuncios, promedio y el docente con "Salir de la materia").
+   Un cajón abierto ocupa todo el ancho. "Cortes y temas" empieza abierto; los cortes son pestañas de carpeta (uno abierto a la vez). */
 const zonaHTML=(titulo,cuerpo,cls)=>cuerpo?`<div class="zona${cls?' '+cls:''}"><p class="zl">${titulo}</p>${cuerpo}</div>`:'';
 function viewMateriaDetailHTML(materiaId){
   const m=state.materias.find(x=>x.id===materiaId);
@@ -162,8 +164,7 @@ function viewMateriaDetailHTML(materiaId){
   const mk=k=>'m:'+materiaId+':'+k,nTemas=state.temas.filter(x=>x.materiaId===materiaId).length;
   const est=m.rol==='estudiante',sem=state.semesters.find(x=>x.id===m.semesterId);
   if(!est&&(!ui.iaUso||(!ui.iaUso.cargando&&Date.now()-(ui.iaUso.t||0)>60000)))setTimeout(cargarUsoIA,0);   // se consulta el cupo al abrir la materia
-  const meta=[sem?esc(sem.name):'',pluralMv(nTemas,'tema','temas'),pluralMv(getCardsTodas(m.id).length,'tarjeta','tarjetas')].filter(Boolean).join(' · ')
-    +(est?' · Solo lectura, publicada por '+esc(nombreDocente(m)):'')
+  const meta=[sem&&!sem.oculto?esc(sem.name):'',est?'Solo lectura, publicada por '+esc(nombreDocente(m)):''].filter(Boolean).join(' · ')
     +(m.semestre?` · <span class="chip">Semestre ${m.semestre}${m.curso?' · Curso '+esc(m.curso):''}</span>`:'');
   const ia=puedeSubir()?dwHTML(mk('ia'),'Generar tema con IA','Sube un PDF o una presentación y la IA arma el tema',`
         <p class="meta" style="margin-top:0">Sube un PDF o una presentación (.pptx), elige en qué corte guardarlo y la IA organiza el contenido en secciones y crea las tarjetas.</p>
@@ -175,30 +176,59 @@ function viewMateriaDetailHTML(materiaId){
         <button class="sec" data-action="pdfPick" style="margin-top:10px">🗜️ Comprimir un PDF</button>
         <div id="iaCupo" style="margin-top:10px">${cupoIAHTML()}</div>
         <div id="iaStatus" class="meta" style="margin-top:8px"></div>`,'🤖'):'';
+  const semV=state.semesters.find(s=>s.id===m.semesterId&&!s.oculto);
+  const crumbs=m.rol==='docente'
+    ?`<nav class="crumbs" aria-label="Ruta"><button type="button" class="linkbtn" data-action="backDocente">← Espacio docente</button><span aria-hidden="true">/</span><span>${esc(m.name)}</span></nav>`
+    :`<nav class="crumbs" aria-label="Ruta"><button type="button" class="linkbtn" data-action="homeMaterias">← Mis materias</button>${semV?`<span aria-hidden="true">/</span><button type="button" class="linkbtn" data-action="openSemester" data-id="${semV.id}">${esc(semV.name)}</button>`:''}</nav>`;
+  const cortesBody=`<div class="${est?'docRO':''}">${cortesZonaHTML(m,cortes)}</div>`;
+  const cortesDw=dwHTML(mk('cortes'),'Cortes y temas',pluralMv(cortes.length,'corte','cortes')+' · '+pluralMv(nTemas,'tema','temas'),cortesBody,'📁','',true);
+  const promDw=m.rol==='docente'?'':dwHTML(mk('prom'),'Mi promedio','<span id="corteAvgSub">'+promSubHTML(cortes)+'</span>',`<div id="corteAvgBox">${corteAvgHTML(cortes)}</div>${est?notasCortesHTML(cortes):''}`,'📊');
+  const ex=est?examenesCardHTML(m):'';
   return `<div class="matV">
-    <button class="sec" data-action="${m.rol==='docente'?'backDocente':'backMaterias'}">${m.rol==='docente'?'← Espacio docente':'← '+esc(((state.semesters.find(s=>s.id===m.semesterId&&!s.oculto))||{}).name||'Mis materias')}</button>
-    <div class="hero" style="--mc:${matColor(m)}"><div class="heroDot"></div><div class="heroTxt"><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1><p class="sub">${meta}</p></div>${est?`<button class="sec heroOut" data-action="leaveShared" data-id="${m.id}">🚪 Salir de la materia</button>`:''}</div>
-    ${m.rol==='docente'?docentePanelHTML(m):zonaHTML(est?'De tu docente':'Tu grupo',cajonesMateriaHTML(m),'zGrid')}
-    ${zonaHTML('Tu estudio',estudiarCajonHTML(m)+(m.rol==='docente'?'':dwHTML(mk('prom'),'Mi promedio en esta materia','<span id="corteAvgSub">'+promSubHTML(cortes)+'</span>',`<div id="corteAvgBox">${corteAvgHTML(cortes)}</div>${est?notasCortesHTML(cortes):''}`,'🧮')))}
+    ${crumbs}
+    <div class="hero" style="--mc:${matColor(m)}"><div class="heroDot"></div><div class="heroTxt"><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1><p class="sub">${meta}</p>${statsMateriaHTML(m,cortes,nTemas)}</div></div>
+    ${m.rol==='docente'?docentePanelHTML(m):''}
+    ${zonaHTML('Tu estudio',`<div class="estGrid${ex?' dos':''}">${estudiarCajonHTML(m)}${ex}</div>`)}
+    ${zonaHTML('Material y notas',cortesDw+materialMateriaHTML(m)+promDw+(est?docenteCajonHTML(m):''),'zGrid')}
     ${zonaHTML('Agregar contenido',ia)}
-    <div class="zona ${est?'docRO':''}"><p class="zl">Cortes y temas · ${pluralMv(cortes.length,'corte','cortes')} · ${pluralMv(nTemas,'tema','temas')}</p>
-      ${cortesZonaHTML(m,cortes)}
-    </div>
   </div>`;
 }
-/* Arriba de la materia: lo del profesor (estudiante) o lo de compartir (materia propia) */
-function cajonesMateriaHTML(m){
+/* Resumen de la materia en pastillas bajo el título: temas, tarjetas, para hoy y promedio */
+function statsMateriaHTML(m,cortes,nTemas){
+  const nC=getCardsTodas(m.id).length,nH=sesionHoy(m.id).length,p=m.rol==='docente'?null:corteStats(cortes).avg;
+  const st=(n,txt)=>`<span class="mstat"><b>${n}</b> ${txt}</span>`;
+  return `<div class="mstats">${st(nTemas,nTemas==1?'tema':'temas')}${st(nC,nC==1?'tarjeta':'tarjetas')}${m.rol==='docente'?'':st(nH,'para hoy')}${p==null?'':`<span class="mstat">Promedio <b>${fmtN(p)}</b></span>`}</div>`;
+}
+/* Exámenes del profesor: tarjeta al lado de Estudiar. Al tocarla se despliega la lista (ocupa todo el ancho). */
+function examenesCardHTML(m){
+  const exs=examenesDe(m);if(!exs.length)return '';
+  const pend=exs.filter(ex=>!miIntento(m,ex.id)&&examAbierto(ex)).length;
+  const k='m:'+m.id+':ex',ab=dwAbierto(k),bid='dwB-'+k.replace(/[^\w-]/g,'_');
+  return `<section class="dw exHero${ab?' open':''}" data-key="dw-${esc(k)}">
+    <button type="button" class="dwHead exHead" data-action="toggleDw" data-k="${esc(k)}" aria-expanded="${ab}" aria-controls="${bid}">
+      <span class="exTop"><span class="dnum" aria-hidden="true">📄</span><span class="dwT"><b>Exámenes de tu profesor</b><small>${pend?pluralMv(pend,'examen por presentar','exámenes por presentar'):'Estás al día · '+pluralMv(exs.length,'examen','exámenes')}</small></span></span>
+      <span class="exFoot">${pend?`<span class="exPill">${pluralMv(pend,'pendiente','pendientes')}</span>`:'<span class="exPill ok">✓ Al día</span>'}<span class="exVer">${ab?'Ocultar':'Ver exámenes'} <span class="chev" aria-hidden="true">›</span></span></span>
+    </button>
+    <div class="dwBody" id="${bid}"><div class="dwInner"><div class="dwPad">${examenesEstudianteHTML(m)}</div></div></div>
+  </section>`;
+}
+/* Material del docente o del grupo: documentos, anuncios y compartir */
+function materialMateriaHTML(m){
   const mk=k=>'m:'+m.id+':'+k;
-  if(m.rol!=='estudiante')return dwHTML(mk('comp'),m.sharedId?'Materia compartida':'Estudiar con otras personas',m.sharedId?'Código, enlace e integrantes del grupo':'Comparte esta materia con tus compañeros',compartidoBoxHTML(m),'🤝');
+  if(m.rol!=='estudiante')return m.rol==='docente'?'':dwHTML(mk('comp'),m.sharedId?'Materia compartida':'Estudiar con otras personas',m.sharedId?'Código, enlace e integrantes del grupo':'Comparte esta materia con tus compañeros',compartidoBoxHTML(m),'🤝');
   let out='';
-  const exs=examenesDe(m),pend=exs.filter(ex=>!miIntento(m,ex.id)&&examAbierto(ex)).length;
-  const ex=examenesEstudianteHTML(m);
-  if(ex)out+=dwHTML(mk('ex'),'Exámenes de tu profesor',pend?pluralMv(pend,'examen por presentar','exámenes por presentar'):pluralMv(exs.length,'examen','exámenes'),ex,'📝',pend||'');
   const nDoc=state.temas.filter(x=>x.materiaId===m.id&&x.archivo).length,dc=docsOriginalesHTML(m);
   if(dc)out+=dwHTML(mk('docs'),'Documentos originales',pluralMv(nDoc,'archivo para descargar','archivos para descargar'),dc,'📎');
   const nAn=anunciosDe(m).length,an=anunciosEstudianteHTML(m);
   if(an)out+=dwHTML(mk('an'),'Anuncios de tu profesor',pluralMv(Math.min(nAn,3),'anuncio reciente','anuncios recientes'),an,'📣');
   return out;
+}
+/* Quién publica la materia y la opción de salir de ella */
+function docenteCajonHTML(m){
+  const nom=nombreDocente(m);
+  return dwHTML('m:'+m.id+':doc','Materia de '+esc(nom),'Solo lectura · publicada por tu docente',
+    `<p class="meta" style="margin-top:0">El contenido de esta materia lo publica ${esc(nom)}. Tus notas, tarjetas repasadas y apuntes son tuyos y privados.</p>
+     <button class="sec" data-action="leaveShared" data-id="${m.id}">🚪 Salir de la materia</button>`,'👤');
 }
 /* El estudiante no edita los cortes (son de la materia de su docente), pero sí escribe sus notas y el peso de cada corte aquí */
 function notasCortesHTML(cortes){

@@ -93,6 +93,7 @@ document.addEventListener('click',async e=>{
     ui.dw=ui.dw||{};ui.dw[b.dataset.k]=abrir;
     if(abrir)requestAnimationFrame(()=>{fitCards(sec);layoutRadials(sec)});
   }
+  else if(a==='homeMaterias')goToView('materias');
   else if(a==='backMaterias'){
     const mm=route.materiaId&&state.materias.find(x=>x.id===route.materiaId);
     if(mm&&mm.rol!=='docente'&&state.semesters.some(s=>s.id===mm.semesterId&&!s.oculto)){route={view:'materias',materiaId:null,semId:mm.semesterId};render()}   // se vuelve al semestre de esa materia
