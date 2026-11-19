@@ -77,6 +77,8 @@ const json = (statusCode, obj) => ({
 // (límite fijo), así que dejamos 10 s de margen para poder responder con un error claro
 // en vez de que Netlify devuelva un 502 sin explicación.
 const LIMITE_MS = 50000;
+// En la función normal cada modelo tiene como mucho 25 s, así caben al menos dos modelos en los 50 s.
+const POR_MODELO_MS = 25000;
 
 // Texto máximo que se analiza. Antes eran 20 000 caracteres y todo lo que viniera después se ignoraba;
 // ahora entra mucho más (el cupo de Gemini se cuenta por petición, no por tamaño). El navegador avisa si se recortó.
@@ -85,11 +87,21 @@ const LIMITE_PDF_B64 = 12 * 1024 * 1024; // ~8 MB de PDF en base64
 
 // Hecho por Sebastián Poveda y Santiago Romero. 2026 · llamada a Gemini con tiempo límite y reintentos
 // "opciones" deja reutilizar esta función con otro esquema (por ejemplo, el chat de preguntas sobre un tema)
+// Modelos que hace poco no respondieron a tiempo: se dejan de últimos por un rato para no volver a perder
+// minutos esperándolos en la siguiente petición (vive en la memoria de la instancia de Netlify).
+const LENTOS = new Map();
+const CASTIGO_LENTO_MS = 15 * 60 * 1000;
+function ordenModelos() {
+  const ahora = Date.now();
+  const lento = m => (LENTOS.get(m) || 0) > ahora;
+  return MODELOS.filter(m => !lento(m)).concat(MODELOS.filter(lento));
+}
+
 async function llamarGemini(apiKey, prompt, limiteMs = LIMITE_MS, pdfBase64 = null, opciones = {}) {
   const esquema = opciones.esquema || ESQUEMA_RESPUESTA;
   const inicio = Date.now();
   let ultima;
-  for (const modelo of MODELOS) {
+  for (const modelo of ordenModelos()) {
     // opciones.porModeloMs: tiempo máximo con cada modelo. Si uno se demora, se pasa al siguiente en vez de
     // gastar todo el tiempo esperando (el chat lo usa para no quedarse colgado con un modelo lento o saturado).
     const finModelo = opciones.porModeloMs ? Date.now() + opciones.porModeloMs : Infinity;
@@ -134,7 +146,11 @@ async function llamarGemini(apiKey, prompt, limiteMs = LIMITE_MS, pdfBase64 = nu
         );
       } catch (e) {
         if (e.name === 'AbortError') {
-          if (cortaModelo) { console.error('El modelo', modelo, 'tardó más de', opciones.porModeloMs, 'ms: se prueba el siguiente'); break; }
+          if (cortaModelo) {
+            console.error('El modelo', modelo, 'tardó más de', opciones.porModeloMs, 'ms: se prueba el siguiente');
+            LENTOS.set(modelo, Date.now() + CASTIGO_LENTO_MS);
+            break;
+          }
           throw new Error('TIMEOUT');
         }
         throw e;
@@ -429,8 +445,11 @@ ${bloqueDocumento}`;
 
   // La versión en segundo plano (generar-tema-background.js) pasa un tiempo máximo mayor.
   const limiteMs = event._limiteMs || LIMITE_MS;
+  // Tiempo máximo con cada modelo: si uno se queda colgado (saturado o un nombre que no responde), se pasa al
+  // siguiente en vez de gastar todo el tiempo esperándolo y terminar en "la IA tardó demasiado".
+  const porModeloMs = event._porModeloMs || POR_MODELO_MS;
   try {
-    const resp = await llamarGemini(apiKey, prompt, limiteMs, pdfBase64 || null);
+    const resp = await llamarGemini(apiKey, prompt, limiteMs, pdfBase64 || null, { porModeloMs });
 
     if (!resp.ok) {
       const errText = await resp.text();
