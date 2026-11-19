@@ -438,7 +438,7 @@ let notasUnsub=null;
 function detenerNotas(){if(notasUnsub){try{notasUnsub()}catch(e){}notasUnsub=null}Object.keys(notasMap).forEach(k=>delete notasMap[k]);Object.keys(notasPend).forEach(k=>delete notasPend[k])}
 function escucharNotas(){
   detenerNotas();
-  if(!currentUid||esProfesor())return;
+  if(!currentUid||(esProfesor()&&!esAdmin()))return;
   notasUnsub=db.collection('anotaciones').doc(currentUid).collection('items').onSnapshot(snap=>{
     Object.keys(notasMap).forEach(k=>delete notasMap[k]);
     snap.docs.forEach(d=>{notasMap[d.id]=d.data()});
@@ -481,7 +481,7 @@ function apuntesHTML(t){
 
 /* ======================= Pregúntale a la IA =======================
    Chat sobre UN tema: la IA responde usando solo el contenido de ese tema (netlify/functions/preguntar-tema.js).
-   Lo usan los estudiantes, con un cupo diario pequeño. La conversación no se guarda: vive mientras la página esté abierta. */
+   Lo usan los estudiantes (y el admin, para probarlo), con un cupo diario pequeño. La conversación no se guarda: vive mientras la página esté abierta. */
 const chatIA={};                         // temaId -> {msgs:[{r:'u'|'ia',t}], cargando, err, cupo}
 const CHAT_SUGERENCIAS=['Explícamelo más fácil','Dame un ejemplo','¿Qué es lo más importante de este tema?','Hazme una pregunta para practicar'];
 function chatHTML(t){
