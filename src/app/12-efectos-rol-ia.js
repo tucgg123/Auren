@@ -159,7 +159,7 @@ function rolCardHTML(){
    Si algo de eso no está disponible (la función no existe, las reglas no se publicaron…),
    se usa la función normal como antes.
    ====================================================================== */
-const ESPERA_MAX_IA_MS=270000;
+const ESPERA_MAX_IA_MS=390000,ESPERA_MAX_PDF_MS=570000;   // un poco más que el tope de generar-tema-background (6 y 9 min), para recibir su mensaje
 let ESPERA_ACK_MS=30000;          // si en este tiempo la función no avisa que arrancó, se explica el motivo en vez de esperar 4 minutos
 async function diagnosticarIA(){
   const base='La función de IA no respondió: nunca llegó a trabajar en tu archivo. ';
@@ -191,7 +191,7 @@ function esperarTrabajoIA(ref,statusEl,limpiar){
     };
     pintar();reloj=setInterval(pintar,1000);
     avisoTope=setTimeout(async()=>{if(terminado||arranco)return;const msg=await diagnosticarIA();if(!terminado&&!arranco)terminar({ok:false,error:msg})},ESPERA_ACK_MS);
-    tope=setTimeout(()=>terminar({ok:false,error:'La IA tardó demasiado en responder. Inténtalo de nuevo o prueba con un archivo más corto.'}),ESPERA_MAX_IA_MS);
+    tope=setTimeout(()=>terminar({ok:false,error:'La IA tardó demasiado en responder. Inténtalo de nuevo o prueba con un archivo más corto.'}),limpiar?ESPERA_MAX_PDF_MS:ESPERA_MAX_IA_MS);
     cancelar=ref.onSnapshot(snap=>{
       const d=snap.exists?snap.data():null;
       if(!d)return;

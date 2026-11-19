@@ -11,7 +11,11 @@
 const { handler: generar } = require('./generar-tema.js');
 
 const PROYECTO = process.env.FIREBASE_PROJECT_ID || '';
-const LIMITE_BACKGROUND_MS = 240000; // 4 minutos para la IA (el máximo de la plataforma es 15)
+// Tiempos para la IA (el máximo de la plataforma es 15 minutos). Cada modelo tiene su propio tope: si uno no
+// responde, se pasa al siguiente en vez de esperar al mismo hasta agotar todo el tiempo.
+// Deben ser menores que lo que espera la página (ESPERA_MAX_IA_MS en src/app/12-efectos-rol-ia.js).
+const LIMITE_BACKGROUND_MS = 360000, POR_MODELO_MS = 100000;          // texto: 6 min en total, 100 s por modelo
+const LIMITE_PDF_MS = 540000, POR_MODELO_PDF_MS = 180000;             // PDF escaneado: 9 min en total, 3 min por modelo
 
 function tokenDe(event) {
   const h = event.headers || {};
@@ -73,10 +77,10 @@ exports.handler = async (event) => {
     try { await guardar(jobId, token, { estado: 'trabajando' }); } catch (e) { console.error('No se pudo avisar que arrancó (revisa FIREBASE_PROJECT_ID y las reglas de Firestore):', e.message); }
 
     partes = Number.isInteger(cuerpo.pdfPartes) && cuerpo.pdfPartes >= 1 && cuerpo.pdfPartes <= 20 ? cuerpo.pdfPartes : 0;
-    let eventoIA = { ...event, httpMethod: 'POST', _limiteMs: LIMITE_BACKGROUND_MS };
+    let eventoIA = { ...event, httpMethod: 'POST', _limiteMs: LIMITE_BACKGROUND_MS, _porModeloMs: POR_MODELO_MS };
     if (partes) {
       const pdfBase64 = await leerEntrada(jobId, token, partes);
-      eventoIA = { ...eventoIA, body: JSON.stringify({ materia: cuerpo.materia, pdfBase64 }), _limiteMs: 420000 };
+      eventoIA = { ...eventoIA, body: JSON.stringify({ materia: cuerpo.materia, pdfBase64 }), _limiteMs: LIMITE_PDF_MS, _porModeloMs: POR_MODELO_PDF_MS };
     }
     const r = await generar(eventoIA);
     if (partes) { await borrarEntrada(jobId, token, partes); partes = 0; }
