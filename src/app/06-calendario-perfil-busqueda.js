@@ -20,14 +20,14 @@ function viewCalendarioHTML(){
   return `
     <div class="viewhead"><h1>🗓️ Calendario</h1></div>
     <div class="calNav">
-      <button class="icon-btn" data-action="calPrev">‹</button>
+      <button class="icon-btn" data-action="calPrev" aria-label="Mes anterior" title="Mes anterior">‹</button>
       <b>${monthNames[m]} ${y}</b>
-      <button class="icon-btn" data-action="calNext">›</button>
+      <button class="icon-btn" data-action="calNext" aria-label="Mes siguiente" title="Mes siguiente">›</button>
     </div>
     <div class="calGrid">${['L','M','X','J','V','S','D'].map(x=>`<i class="dh">${x}</i>`).join('')}${cells}</div>
     ${sel?`<div class="card">
       <h3>${fmtDateLong(sel)}</h3>
-      ${selEvents.length?selEvents.map(e=>e.docente?evDocFilaHTML(e,true):`<div class="li"><span>${TY[e.type]||'📌'} ${esc(e.title)}</span><button class="icon-btn" data-action="delEvent" data-id="${e.id}">🗑️</button></div>`).join(''):'<p class="meta">Sin eventos este día.</p>'}
+      ${selEvents.length?selEvents.map(e=>e.docente?evDocFilaHTML(e,true):`<div class="li"><span>${TY[e.type]||'📌'} ${esc(e.title)}</span><button class="icon-btn" data-action="delEvent" data-id="${e.id}" aria-label="Eliminar evento ${esc(e.title)}" title="Eliminar evento">🗑️</button></div>`).join(''):'<p class="meta">Sin eventos este día.</p>'}
       <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="sec" data-action="addEvent" data-date="${sel}">+ Agregar evento</button>${soyDoc?`<button class="pr" data-action="newEvDocCal" data-date="${sel}">👩‍🏫 Evento para mis estudiantes</button>`:''}</div>
     </div>`:'<p class="meta">Toca un día para ver o agregar eventos.</p>'}
     <h3>Próximos</h3>
@@ -50,7 +50,7 @@ function viewPerfilHTML(){
         <div><b>${globalAvg==null?'—':fmtN(globalAvg)}</b>promedio global</div>
       </div>
     </div>
-    ${dwHTML('pf:av','Avatar','Elige el emoji que te representa',`<div class="avatarPicker">${AV.map(a=>`<button class="avBtn ${a===p.avatar?'on':''}" data-action="setAvatar" data-a="${a}">${a}</button>`).join('')}</div>`,esc(p.avatar))}
+    ${dwHTML('pf:av','Avatar','Elige el emoji que te representa',`<div class="avatarPicker">${AV.map(a=>`<button class="avBtn ${a===p.avatar?'on':''}" data-action="setAvatar" data-a="${a}" aria-label="Avatar ${a}" aria-pressed="${a===p.avatar}">${a}</button>`).join('')}</div>`,esc(p.avatar))}
     ${dwHTML('pf:ed','Editar perfil','Nombre, carrera, escala de notas y meta',`
       <label class="lbl" style="margin-top:0">Nombre</label><input class="fld" data-action="profileField" data-f="name" value="${esc(p.name)}" maxlength="40">
       <label class="lbl">Carrera y universidad</label><input class="fld" data-action="profileField" data-f="career" value="${esc(p.career)}" maxlength="80">

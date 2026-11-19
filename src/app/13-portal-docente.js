@@ -314,7 +314,7 @@ function docenteEstudiantesHTML(m){
     <p class="meta" style="margin:4px 0 0">Verán la invitación al iniciar sesión con ese mismo correo (con Google o con correo verificado).</p>
     <button class="pr" style="margin-top:8px" data-action="inviteStudents" data-id="${m.id}">📨 Invitar</button>
     <div style="margin-top:14px"><b style="font-size:.85em">Estudiantes (${invs.length})</b></div>
-    ${invs.length?invs.map(i=>`<div class="row" style="justify-content:space-between;margin-top:6px"><span>${esc(i.nombre||i.email)} <span class="meta">${i.nombre?esc(i.email):''}</span> ${estado(i)}</span><button class="icon-btn" data-action="removeInvite" data-id="${m.id}" data-inv="${esc(i.id)}" title="Quitar">🗑️</button></div>`).join(''):'<p class="meta" style="margin:6px 0 0">Aún no has invitado a nadie.</p>'}
+    ${invs.length?invs.map(i=>`<div class="row" style="justify-content:space-between;margin-top:6px"><span>${esc(i.nombre||i.email)} <span class="meta">${i.nombre?esc(i.email):''}</span> ${estado(i)}</span><button class="icon-btn" data-action="removeInvite" data-id="${m.id}" data-inv="${esc(i.id)}" title="Quitar" aria-label="Quitar a ${esc(i.nombre||i.email)}">🗑️</button></div>`).join(''):'<p class="meta" style="margin:6px 0 0">Aún no has invitado a nadie.</p>'}
     <div class="row" style="margin-top:14px"><button class="sec" data-action="delMateria" data-id="${m.id}">🗑️ Eliminar materia para todos</button></div>
   </div>`;
 }
@@ -383,7 +383,7 @@ function docenteExamenesHTML(m){
     return `<div class="card exCard">
       <div class="stHead"><b>${esc(ex.titulo||'Sin título')}</b>${chipEstado(ex)}</div>
       <p class="meta" style="margin:6px 0 0">${(ex.preguntas||[]).length} pregunta${(ex.preguntas||[]).length==1?'':'s'}${ex.cierre?' · cierra '+fmtFechaHora(ex.cierre):''}${ex.duracion?' · ⏱️ '+ex.duracion+' min':''}${ex.estado==='borrador'?'':' · entregas '+ints.length+'/'+nEst+prom}</p>
-      <div class="row" style="flex-wrap:wrap">${acciones}<button class="icon-btn" data-action="exEliminarLista" data-id="${m.id}" data-ex="${ex.id}" title="Eliminar examen">🗑️</button></div>
+      <div class="row" style="flex-wrap:wrap">${acciones}<button class="icon-btn" data-action="exEliminarLista" data-id="${m.id}" data-ex="${ex.id}" title="Eliminar examen" aria-label="Eliminar examen">🗑️</button></div>
     </div>`;
   }).join('');
   return `<div class="viewhead"><h2>📝 Exámenes</h2><span class="row" style="margin:0;flex-wrap:wrap">${exs.some(e=>e.estado!=='borrador')?`<button class="sec" data-action="libroNotas" data-id="${m.id}">⬇️ Libro de notas (Excel)</button>`:''}<button class="pr" data-action="newExam" data-id="${m.id}">+ Nuevo examen</button></span></div>
@@ -528,10 +528,10 @@ function viewDocExamenHTML(){
   ${lock?'':bancoPanelHTML()}
   <div class="viewhead" style="margin-top:18px"><h2>Preguntas (${exBuf.preguntas.length})</h2></div>
   ${exBuf.preguntas.length?exBuf.preguntas.map((q,i)=>`<div class="card exQ" style="margin-bottom:12px">
-    <div class="row" style="justify-content:space-between;margin-top:0"><b>Pregunta ${i+1}</b>${q.temaTitulo?`<span class="chip">${esc(q.temaTitulo)}</span>`:''}${lock?'':`<button class="icon-btn" data-action="exDelQ" data-q="${q.id}" title="Eliminar pregunta">🗑️</button>`}</div>
+    <div class="row" style="justify-content:space-between;margin-top:0"><b>Pregunta ${i+1}</b>${q.temaTitulo?`<span class="chip">${esc(q.temaTitulo)}</span>`:''}${lock?'':`<button class="icon-btn" data-action="exDelQ" data-q="${q.id}" title="Eliminar pregunta" aria-label="Eliminar pregunta ${i+1}">🗑️</button>`}</div>
     <textarea class="fld" data-ex="enun" data-q="${q.id}" placeholder="Escribe la pregunta" ${dis}>${esc(q.enunciado)}</textarea>
     <div class="row" style="flex-wrap:wrap;margin:6px 0"><label class="meta">Dificultad</label><select class="fld" data-ex="qdif" data-q="${q.id}" style="width:auto" ${dis}>${['facil','media','dificil'].map(v=>`<option value="${v}" ${(q.dif||'media')===v?'selected':''}>${nombreDif(v)}</option>`).join('')}</select>${esHueco(q)?'<span class="chip">Completar</span>':q.tipo==='vf'?'<span class="chip">Verdadero o falso</span>':''}</div>
-    ${esHueco(q)?`<label class="lbl">Respuesta esperada (se acepta sin tildes ni mayúsculas)</label><input class="fld" data-ex="hueco" data-q="${q.id}" value="${esc(q.correcta||'')}" maxlength="80" ${dis}>`:[0,1,2,3].map(j=>`<div class="exOpt"><button type="button" class="exRadio ${q.correcta===j?'on':''}" data-action="exCorrecta" data-q="${q.id}" data-i="${j}" title="Marcar como correcta" ${dis}>${q.correcta===j?'✓':''}</button><input class="fld" data-ex="opt" data-q="${q.id}" data-i="${j}" value="${esc(q.opciones[j]||'')}" placeholder="Opción ${j+1}${j>1?' (opcional)':''}" ${dis}></div>`).join('')}
+    ${esHueco(q)?`<label class="lbl">Respuesta esperada (se acepta sin tildes ni mayúsculas)</label><input class="fld" data-ex="hueco" data-q="${q.id}" value="${esc(q.correcta||'')}" maxlength="80" ${dis}>`:[0,1,2,3].map(j=>`<div class="exOpt"><button type="button" class="exRadio ${q.correcta===j?'on':''}" data-action="exCorrecta" data-q="${q.id}" data-i="${j}" title="Marcar como correcta" aria-label="Marcar la opción ${j+1} como correcta" aria-pressed="${q.correcta===j}" ${dis}>${q.correcta===j?'✓':''}</button><input class="fld" data-ex="opt" data-q="${q.id}" data-i="${j}" value="${esc(q.opciones[j]||'')}" placeholder="Opción ${j+1}${j>1?' (opcional)':''}" ${dis}></div>`).join('')}
     <label class="lbl">💡 Explicación (opcional, el estudiante la ve después de entregar si falló)</label><textarea class="fld" data-ex="exp" data-q="${q.id}" rows="2" maxlength="400" placeholder="Por qué esta es la respuesta correcta" ${dis}>${esc(q.exp||'')}</textarea>
   </div>`).join(''):'<div class="empty">Aún no hay preguntas. Genera algunas desde tus temas o agrega una manualmente.</div>'}
   ${lock?'':'<button class="sec" data-action="exAddQ">+ Agregar pregunta</button>'}
@@ -679,7 +679,7 @@ function viewDocResultadosHTML(){
   ${r.filas.length?r.filas.map(f=>{
     const abierto=docResSel===f.uid;
     return `<div class="card resFila" style="margin-bottom:8px">
-      <div class="row resCab" style="justify-content:space-between;margin-top:0" data-action="resFila" data-u="${f.uid}">
+      <div class="row resCab" style="justify-content:space-between;margin-top:0" data-action="resFila" data-u="${f.uid}" role="button" tabindex="0" aria-expanded="${abierto}">
         <div><b>${esc(f.nombre)}</b><div class="meta" style="margin:0">${esc(f.email)}${f.ini&&ms(f.ini.inicio)?' · inició '+esc(fmtFechaHora(ms(f.ini.inicio))):''}${f.intento&&ms(f.intento.enviado)?' · entregó '+esc(fmtFechaHora(ms(f.intento.enviado))):''}${minutosUsados(f)!=null?' · '+minutosUsados(f)+' min':''}</div></div>
         <div style="text-align:right">${f.res?`<b style="color:${colorPct(f.res.pct)}">${f.res.ok}/${f.res.total} · ${f.res.pct}%</b><div class="meta" style="margin:0">nota ${fmtN(f.res.nota)} / ${f.res.escala}</div>`
           :f.intento?'<span class="chip">Entregó (calculando…)</span>':f.ini?'<span class="chip">⏳ Empezó y no entregó</span>':'<span class="chip">⏳ Sin entregar</span>'}</div>

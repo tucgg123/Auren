@@ -168,8 +168,8 @@ function docenteCard(m){
     <p class="meta">${temas.length} tema${temas.length==1?'':'s'} · ${pub} publicado${pub==1?'':'s'} · ${unidos} estudiante${unidos==1?'':'s'} · ${nEx} examen${nEx==1?'':'es'}</p>
     <div class="row">
       <button class="sec" data-action="openMateria" data-id="${m.id}">Abrir →</button>
-      <button class="icon-btn" data-action="renameMateria" data-id="${m.id}" title="Editar materia">✏️</button>
-      <button class="icon-btn" data-action="delMateria" data-id="${m.id}" title="Eliminar materia para todos">🗑️</button>
+      <button class="icon-btn" data-action="renameMateria" data-id="${m.id}" title="Editar materia" aria-label="Editar materia ${esc(m.name)}">✏️</button>
+      <button class="icon-btn" data-action="delMateria" data-id="${m.id}" title="Eliminar materia para todos" aria-label="Eliminar materia ${esc(m.name)} para todos">🗑️</button>
     </div>
   </div>`;
 }

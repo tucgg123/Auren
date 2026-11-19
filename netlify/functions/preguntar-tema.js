@@ -3,6 +3,8 @@
 // El estudiante escribe una duda sobre un tema que está estudiando y la IA le responde usando SOLO el contenido
 // de ese tema (lo manda el navegador). Lo puede usar cualquier persona con sesión iniciada (no solo profesores),
 // con un cupo diario pequeño por persona guardado en Firestore (iaChat/{uid}), igual que el cupo de archivos.
+// La pregunta se descuenta ANTES de llamar a Gemini: las reglas de Firestore solo dejan subir el contador de 1 en 1,
+// así que si alguien manda muchas preguntas a la vez, solo la primera pasa (antes todas leían el mismo cupo y pasaban).
 // Cambia el cupo con la variable de entorno LIMITE_CHAT_DIARIO en Netlify (por defecto 15 preguntas al día).
 const { util } = require('./generar-tema.js');
 const { llamarGemini, verificarUsuario, tokenDe, json, MODELOS } = util;
@@ -25,13 +27,16 @@ async function leerCupo(uid, token) {
   const f = (await r.json()).fields || {};
   return Number(f.dia && f.dia.integerValue) === diaColombia() ? (Number(f.n && f.n.integerValue) || 0) : 0;
 }
+// Devuelve true si reservó la pregunta, false si otra petición de la misma persona la ganó (403 de las reglas).
 async function sumarCupo(uid, token, n) {
   const r = await fetch(urlChat(uid), {
     method: 'PATCH',
     headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
     body: JSON.stringify({ fields: { dia: { integerValue: String(diaColombia()) }, n: { integerValue: String(n + 1) } } })
   });
+  if (r.status === 403) return false;
   if (!r.ok) throw new Error('Firestore respondió ' + r.status);
+  return true;
 }
 
 const ESQUEMA = { type: 'OBJECT', properties: { respuesta: { type: 'STRING' } }, required: ['respuesta'] };
@@ -69,6 +74,17 @@ exports.handler = async (event) => {
   if (usados >= LIMITE_CHAT) {
     return json(429, { error: 'Ya hiciste tus ' + LIMITE_CHAT + ' preguntas de hoy. El cupo se renueva a la medianoche (hora de Colombia).', cupo: { usados, limite: LIMITE_CHAT, restantes: 0 } });
   }
+  // Se reserva la pregunta antes de gastar la IA (si falla, igual cuenta: la petición a Gemini ya costó)
+  try {
+    if (!await sumarCupo(usuario.localId, token, usados)) {
+      return json(429, { error: 'Ya hay otra pregunta en camino. Espera la respuesta y vuelve a preguntar.' });
+    }
+  } catch (e) {
+    console.error('No se pudo registrar el uso del chat:', e);
+    return json(503, { error: 'No se pudo comprobar tu cupo de preguntas. Inténtalo de nuevo en un momento.' });
+  }
+  const n = usados + 1;
+  const cupo = { usados: n, limite: LIMITE_CHAT, restantes: Math.max(0, LIMITE_CHAT - n) };
 
   const conversacion = historial.map(m => (m.r === 'u' ? 'ESTUDIANTE: ' : 'TUTOR: ') + m.t).join('\n');
   const prompt = `Eres un tutor universitario paciente que ayuda a un estudiante a entender un tema. Respondes en español, en texto plano (sin asteriscos ni markdown), con frases claras y cortas.
@@ -105,10 +121,7 @@ Devuelve EXCLUSIVAMENTE un JSON: {"respuesta":"tu respuesta"}`;
     respuesta = respuesta.replace(/\*\*/g, '').trim().slice(0, 3000);
     if (!respuesta) return json(502, { error: 'La IA no devolvió una respuesta. Prueba a preguntar de otra forma.' });
 
-    let n = usados;
-    try { await sumarCupo(usuario.localId, token, usados); n = usados + 1; }
-    catch (e) { console.error('No se pudo registrar el uso del chat:', e); }
-    return json(200, { respuesta, cupo: { usados: n, limite: LIMITE_CHAT, restantes: Math.max(0, LIMITE_CHAT - n) } });
+    return json(200, { respuesta, cupo });
   } catch (err) {
     if (err.message === 'TIMEOUT') return json(504, { error: 'La IA tardó demasiado. Inténtalo de nuevo.' });
     console.error('Error inesperado en el chat:', err);
