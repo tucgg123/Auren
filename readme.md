@@ -56,5 +56,11 @@ Netlify también ejecuta `npm run build` en cada despliegue, así que lo publica
 - Las notificaciones del Pomodoro suenan/avisan con la app abierta o en segundo plano; con el navegador cerrado no hay aviso (haría falta un servidor de notificaciones push).
 - La política de contenido (CSP) ya se aplica (está en `netlify.toml`). Si agregas una librería o servicio de otro dominio, hay que añadir ese dominio a la política o el navegador lo bloqueará.
 
+## Límites de gasto (hay que ponerlos a mano)
+El código ya limita a cada persona (archivos por hora y por día, preguntas del chat por día; el cupo se reserva antes de llamar a Gemini, así que mandar muchas peticiones a la vez no lo salta). Pero eso no frena a alguien que cree muchas cuentas. El freno final está en las consolas:
+- **Google Cloud / AI Studio (Gemini)**: Billing → Budgets & alerts, un presupuesto mensual con avisos al 50 %, 90 % y 100 %. En APIs & Services → Generative Language API → Quotas, baja las peticiones por minuto y por día a lo que Auren necesita.
+- **Firebase**: el mismo presupuesto cubre Firestore y Storage (el proyecto de Firebase es un proyecto de Google Cloud). En Firestore → Usage revisa lecturas y escrituras de vez en cuando.
+- **Netlify**: Team settings → Billing → Usage, activa los avisos de uso de funciones y de ancho de banda, y deja apagado el aumento automático de plan si no lo quieres.
+
 ## Lo que NO se pudo probar aquí
 Se probó con simulaciones del navegador y de la base de datos (cientos de comprobaciones automáticas), pero **no** contra Firebase ni un navegador reales. Hay que confirmar a mano: las reglas de Firestore publicadas, el inicio de sesión y la recarga del rol, la compresión de imágenes y de PDF (dibujan en un canvas real), la voz, el aspecto en celular y escritorio, y el borrado real de cuentas con la cuenta de servicio.

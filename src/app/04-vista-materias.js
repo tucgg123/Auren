@@ -475,7 +475,7 @@ function temaBlock(t){
   const tabs=[['contenido','Contenido'],...(hasSec?[['esquema','Esquema']]:[]),['tarjetas',`Tarjetas <span class="chip">${cards.length}</span>`],...(conApuntes?[['apuntes','📝 Mis apuntes']]:[]),...(conChat?[['chat','🤖 Pregúntale']]:[])];
   return `<details class="s" data-tema="${t.id}" ${ui.open[t.id]?'open':''}>
     <summary><span class="temaHead"><span class="tt"><span class="ttIco">${IC_DOC}</span><span>${esc(t.title)||'(tema sin título)'}</span></span><span class="chips">${esDocenteMat(t.materiaId)?`<span class="chip ${t.publicado?'chipOk':''}">${t.publicado?'✅ Publicado':'📝 Borrador'}</span>`:''}${t.by?`<span class="chip" title="${esc(t.fuente||'')}">${IC_PERSONA} ${esc(t.by)}</span>`:''}${hasSec?`<span class="chip">${t.secciones.length} sección${t.secciones.length==1?'':'es'}</span>`:''}<span class="chip">${cards.length} tarjeta${cards.length==1?'':'s'}</span></span></span>
-      <span class="tBtns">${t.archivo?`<button class="dlBtn" data-action="descargarOriginal" data-id="${t.id}" title="Descargar documento original" aria-label="Descargar ${esc(t.title)||'documento original'}">${IC_BAJAR}</button>`:''}${esDocenteMat(t.materiaId)?`<button class="icon-btn" data-action="togglePublicar" data-id="${t.id}" title="${t.publicado?'Pasar a borrador':'Publicar a los estudiantes'}">${t.publicado?'📝':'✅'}</button>`:''}<button class="icon-btn" data-action="delTema" data-id="${t.id}" title="Eliminar tema">🗑️</button></span>
+      <span class="tBtns">${t.archivo?`<button class="dlBtn" data-action="descargarOriginal" data-id="${t.id}" title="Descargar documento original" aria-label="Descargar ${esc(t.title)||'documento original'}">${IC_BAJAR}</button>`:''}${esDocenteMat(t.materiaId)?`<button class="icon-btn" data-action="togglePublicar" data-id="${t.id}" title="${t.publicado?'Pasar a borrador':'Publicar a los estudiantes'}" aria-label="${t.publicado?'Pasar a borrador':'Publicar a los estudiantes'}: ${esc(t.title)}">${t.publicado?'📝':'✅'}</button>`:''}<button class="icon-btn" data-action="delTema" data-id="${t.id}" title="Eliminar tema" aria-label="Eliminar tema ${esc(t.title)}">🗑️</button></span>
     </summary>
     <div class="b">
       <input class="fld tituloTema" data-action="editTemaTitle" data-id="${t.id}" value="${esc(t.title)}" placeholder="Título del tema">
@@ -530,6 +530,6 @@ function cardRow(c){
     <span class="cl">Frente</span><textarea class="fld sm cf" rows="1" data-action="editCardFront" data-id="${c.id}" placeholder="Frente (término / pregunta)">${esc(c.front)}</textarea>
     <span class="cl">Reverso</span><textarea class="fld sm cb" rows="1" data-action="editCardBack" data-id="${c.id}" placeholder="Reverso (definición / respuesta)">${esc(c.back)}</textarea>
     <span class="cl">Por qué</span><textarea class="fld sm ce" rows="1" data-action="editCardExp" data-id="${c.id}" placeholder="Explicación (opcional): se muestra cuando alguien falla esta tarjeta" maxlength="400">${esc(c.exp||'')}</textarea>
-    <button class="icon-btn" data-action="delCard" data-id="${c.id}" title="Eliminar tarjeta">🗑️</button>
+    <button class="icon-btn" data-action="delCard" data-id="${c.id}" title="Eliminar tarjeta" aria-label="Eliminar tarjeta">🗑️</button>
   </div>`;
 }

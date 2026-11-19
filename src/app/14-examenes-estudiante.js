@@ -194,7 +194,7 @@ function viewPerfilDocenteHTML(){
       <div class="pfhero"><div class="pfav">${esc(p.avatar)}</div><div><h2 style="margin:0">${esc(p.name)||'Profesor'}</h2><p class="meta" style="margin:2px 0 0">${esc(p.career)||'Agrega tu institución'}</p></div></div>
       <div class="pgs"><div><b>${mats.length}</b>materias</div><div><b>${nEx}</b>exámenes</div></div>
     </div>
-    ${dwHTML('pf:av','Avatar','Elige el emoji que te representa',`<div class="avatarPicker">${AV.map(a=>`<button class="avBtn ${a===p.avatar?'on':''}" data-action="setAvatar" data-a="${a}">${a}</button>`).join('')}</div>`,esc(p.avatar))}
+    ${dwHTML('pf:av','Avatar','Elige el emoji que te representa',`<div class="avatarPicker">${AV.map(a=>`<button class="avBtn ${a===p.avatar?'on':''}" data-action="setAvatar" data-a="${a}" aria-label="Avatar ${a}" aria-pressed="${a===p.avatar}">${a}</button>`).join('')}</div>`,esc(p.avatar))}
     ${dwHTML('pf:ed','Editar perfil','Nombre, institución y escala de notas',`
       <label class="lbl" style="margin-top:0">Nombre (lo verán tus estudiantes)</label><input class="fld" data-action="profileField" data-f="name" value="${esc(p.name)}" maxlength="40">
       <label class="lbl">Institución</label><input class="fld" data-action="profileField" data-f="career" value="${esc(p.career)}" maxlength="80">
@@ -297,6 +297,11 @@ document.addEventListener('click',async e=>{
     exGuardarLuego();render(true);
   }
   else if(a==='exDelQ'&&exBuf){
+    // Se guarda solo (sin botón de deshacer): si la pregunta ya tiene texto, se confirma antes de borrarla
+    const q=exBuf.preguntas.find(x=>x.id===b.dataset.q);
+    const conTexto=q&&(String(q.enunciado||'').trim()||(q.opciones||[]).some(o=>String(o||'').trim()));
+    if(conTexto&&!await UI.confirmar('¿Eliminar esta pregunta del examen?'))return;
+    if(!exBuf)return;
     exBuf.preguntas=exBuf.preguntas.filter(q=>q.id!==b.dataset.q);exGuardarLuego();render(true);
   }
   else if(a==='exCorrecta'&&exBuf&&exBuf.estado==='borrador'){

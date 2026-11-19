@@ -284,12 +284,15 @@ async function leerRol(uid, token) {
 // Antes vivía en la memoria de la instancia de Netlify y se perdía cada vez que esta se apagaba, así que casi no
 // limitaba. Ahora se guarda en Firestore (iaHora/{uid}: {h: número de hora, n: peticiones en esa hora}) con el token
 // de la propia persona; las reglas solo le dejan subirlo de 1 en 1 o reiniciarlo cuando empieza otra hora.
-// Si no se puede leer (por ejemplo, las reglas nuevas aún no están publicadas) se deja pasar y queda el cupo diario.
+// Si Firestore no responde bien (por ejemplo, las reglas de iaHora aún no están publicadas) NO se deja pasar: antes sí,
+// y eso dejaba abierta la puerta a gastar la cuota de Gemini sin freno. Reservar antes de llamar a la IA también impide
+// mandar muchas peticiones a la vez: las reglas solo dejan subir el contador de 1 en 1 y las demás reciben 403.
 // Cámbialo con la variable de entorno LIMITE_IA_HORA en Netlify.
 // ---------------------------------------------------------------------------------------------
 const LIMITE_POR_HORA = Number(process.env.LIMITE_IA_HORA) || 30;
 const horaActual = () => Math.floor(Date.now() / 3600000);
 const urlHora = uid => 'https://firestore.googleapis.com/v1/projects/' + PROYECTO + '/databases/(default)/documents/iaHora/' + uid;
+const ERROR_LIMITE_HORA = 'No se pudo comprobar tu límite de uso de la IA. Inténtalo de nuevo en un momento. Si eres quien administra la página, revisa que las reglas de Firestore (colección iaHora) estén publicadas.';
 // Devuelve '' si puede seguir, o el mensaje de error para la persona.
 async function revisarLimiteHora(uid, token) {
   let n = 0;
@@ -299,10 +302,10 @@ async function revisarLimiteHora(uid, token) {
       const f = (await r.json()).fields || {};
       if (Number(f.h && f.h.integerValue) === horaActual()) n = Number(f.n && f.n.integerValue) || 0;
     } else if (r.status !== 404) {
-      console.error('No se pudo leer el límite por hora (Firestore ' + r.status + '). ¿Publicaste las reglas de iaHora? Se deja pasar.');
-      return '';
+      console.error('No se pudo leer el límite por hora (Firestore ' + r.status + '). ¿Publicaste las reglas de iaHora?');
+      return ERROR_LIMITE_HORA;
     }
-  } catch (e) { console.error('No se pudo leer el límite por hora:', e); return ''; }
+  } catch (e) { console.error('No se pudo leer el límite por hora:', e); return ERROR_LIMITE_HORA; }
   if (n >= LIMITE_POR_HORA) return 'Llegaste al límite de ' + LIMITE_POR_HORA + ' archivos por hora. Inténtalo más tarde.';
   try {
     const r = await fetch(urlHora(uid), {
@@ -312,8 +315,8 @@ async function revisarLimiteHora(uid, token) {
     });
     // Si lo pudo leer pero no escribir, casi siempre es otra petición suya al mismo tiempo que ya subió el contador
     if (r.status === 403) return 'Ya hay otro archivo procesándose. Espera unos segundos y vuelve a intentarlo.';
-    if (!r.ok) console.error('No se pudo registrar el límite por hora (Firestore ' + r.status + ').');
-  } catch (e) { console.error('No se pudo registrar el límite por hora:', e); }
+    if (!r.ok) { console.error('No se pudo registrar el límite por hora (Firestore ' + r.status + ').'); return ERROR_LIMITE_HORA; }
+  } catch (e) { console.error('No se pudo registrar el límite por hora:', e); return ERROR_LIMITE_HORA; }
   return '';
 }
 
@@ -357,7 +360,7 @@ exports.handler = async (event) => {
     }
   }
   const errHora = await revisarLimiteHora(usuario.localId, tokenDe(event));
-  if (errHora) return json(429, { error: errHora });
+  if (errHora) return json(errHora === ERROR_LIMITE_HORA ? 503 : 429, { error: errHora });
 
   const apiKey = process.env.APIKEYGEMINIS;
   if (!apiKey) {

@@ -102,11 +102,15 @@ exports.handler = async event => {
     }
     const borrados = {
       anotaciones: await borrarSubcoleccion('anotaciones/' + uid + '/items', tok),
-      banco: await borrarSubcoleccion('bancoPreguntas/' + uid + '/items', tok)
+      banco: await borrarSubcoleccion('bancoPreguntas/' + uid + '/items', tok),
+      // El cuaderno se guarda por materia en users/{uid}/materias: borrar solo users/{uid} dejaba esas materias huérfanas
+      materias: await borrarSubcoleccion('users/' + uid + '/materias', tok)
     };
     await borrarDoc('users/' + uid, tok);
     await borrarDoc('usuarios/' + uid, tok);
     await borrarDoc('iaUso/' + uid, tok);
+    await borrarDoc('iaChat/' + uid, tok);
+    await borrarDoc('iaHora/' + uid, tok);
     return json(200, { ok: true, borrados });
   } catch (e) {
     console.error('Borrado de cuenta:', e);
