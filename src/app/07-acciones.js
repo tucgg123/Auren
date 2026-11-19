@@ -190,14 +190,23 @@ document.addEventListener('click',async e=>{
     if(name&&name.trim())mutate(s=>{
       const mine=s.cortes.filter(c=>c.materiaId===b.dataset.mat);
       const used=mine.reduce((x,c)=>x+(+c.weight||0),0);
-      const id=uid();ui.open[id]=true;
+      const id=uid();ui.open[id]=true;ui.corteAb=ui.corteAb||{};ui.corteAb[b.dataset.mat]=id;
       s.cortes.push({id,materiaId:b.dataset.mat,name:name.trim(),weight:Math.max(0,100-used),score:null});
     });
   }
   else if(a==='editCorte'||a==='doneCorte'){
-    const el=b.closest('.folder');
-    if(el.classList.contains('editing')){el.classList.remove('editing');render();}
+    const el=b.closest('.cPanel,.folder');if(!el)return;
+    if(el.classList.contains('editing')){el.classList.remove('editing');render(true);}
     else{el.classList.add('editing');el.open=true;const i=el.querySelector('.corteEdit input');if(i)i.focus();}
+  }
+  else if(a==='corteTab'){
+    /* Pestañas de carpeta: solo un corte abierto a la vez (sin repintar la pantalla) */
+    const abrir=!b.classList.contains('on'),zona=b.closest('.zona');if(!zona)return;
+    ui.corteAb=ui.corteAb||{};ui.corteAb[b.dataset.mat]=abrir?b.dataset.id:'';
+    zona.querySelectorAll('.cTab[data-id]').forEach(x=>{const on=abrir&&x===b;x.classList.toggle('on',on);x.setAttribute('aria-expanded',String(on))});
+    zona.querySelectorAll('.cPanel').forEach(p=>{p.hidden=!(abrir&&p.dataset.cpanel===b.dataset.id)});
+    const h=zona.querySelector('.cHint');if(h)h.hidden=abrir;
+    if(abrir){const p=zona.querySelector('.cPanel:not([hidden])');if(p){requestAnimationFrame(()=>{fitCards(p);layoutRadials(p)});p.scrollIntoView({behavior:reducido()?'auto':'smooth',block:'nearest'})}}
   }
   else if(a==='delCorte'){
     const id=b.dataset.id,c=state.cortes.find(x=>x.id===id);if(!c)return;
@@ -223,6 +232,7 @@ document.addEventListener('click',async e=>{
   }
   else if(a==='openTool'){startTool(b.dataset.tool,b.dataset.mat);}
   else if(a==='quizStart'){comenzarQuiz()}
+  else if(a==='quizTiposChip'&&toolState&&toolState.setup){toolState.tipos=b.dataset.v;ui.quizCfg[route.materiaId].tipos=toolState.tipos;render(true)}
   else if(a==='redoTool'){startTool(route.tool,route.materiaId);}
   else if(a==='flipCard'){
     toolState.flipped=!toolState.flipped;
@@ -274,6 +284,7 @@ document.addEventListener('click',async e=>{
     if(route.tool!=='repaso'&&toolState.idx>=toolState.cards.length){toolState.fxFin=true;toolState.fxPct=toolState.seen?toolState.known/toolState.seen:0}
     render();
   }
+  else if((a==='answerQuiz'||a==='answerHueco')&&route.tool==='tablero'){tabResponder(a==='answerHueco'?limpioT(($('huecoInput')||{}).value)||'(sin respuesta)':b.dataset.opt)}
   else if(a==='answerQuiz'||a==='answerHueco'){
     const q=toolState.questions[toolState.idx];
     if(q.selected)return;
@@ -283,10 +294,10 @@ document.addEventListener('click',async e=>{
     if(acierto)toolState.score++;
     const realQ=state.cards.find(x=>x.id===q.card.id);
     if(realQ){repasarTarjeta(realQ,acierto);persist()}      // el repaso espaciado también aprende de los quiz
-    if(route.tool!=='examen'||examInstantaneo){
-      toolState.combo=acierto?(toolState.combo||0)+1:0;
-      toolState.fx={tipo:acierto?'ok':'no'};
-    }
+    /* Combo y XP cuentan siempre; en el Modo examen sin "ver al instante" se muestran recién al final */
+    toolState.combo=acierto?(toolState.combo||0)+1:0;toolState.mejor=Math.max(toolState.mejor||0,toolState.combo);
+    q.xp=acierto?xpAcierto(toolState.combo):0;q.combo=toolState.combo;toolState.xp=(toolState.xp||0)+q.xp;
+    if(route.tool!=='examen'||examInstantaneo)toolState.fx={tipo:acierto?'ok':'no'};
     render();
   }
   else if(a==='nextQuestion'){
@@ -380,7 +391,8 @@ document.addEventListener('input',e=>{
   else if(a==='editCorteName'){
     const c=state.cortes.find(x=>x.id===id);if(!c)return;
     c.name=e.target.value;persist();
-    const ft=e.target.closest('.folder')?.querySelector('.ft');if(ft)ft.textContent='📁 '+(c.name||'(corte sin nombre)');
+    const ft=e.target.closest('.cPanel,.folder')?.querySelector('.ft');if(ft)ft.textContent=c.name||'(corte sin nombre)';
+    const tn=document.querySelector('.cTab[data-id="'+id+'"] .cTabN');if(tn)tn.textContent=c.name||'(corte sin nombre)';
   }
   else if(a==='editCorteWeight'){
     const c=state.cortes.find(x=>x.id===id);if(!c)return;

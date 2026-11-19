@@ -31,6 +31,7 @@ const ACTIVIDADES=[
   {g:'juega',t:'emparejar',ico:'🧩',n:'Emparejar',d:'Une cada término con su definición'},
   {g:'juega',t:'repaso',ico:'⏱️',n:'Contrarreloj',d:'¿Cuántas sabes en 5 minutos?'},
   {g:'juega',t:'quiz',ico:'❓',n:'Quiz',d:'Preguntas con combos y confeti'},
+  {g:'juega',t:'tablero',ico:'🎲',n:'Juego de tablero',d:'Lanza el dado: preguntas, lecciones, cofres y trampas'},
   {g:'prueba',t:'examen',ico:'📝',n:'Modo examen',d:'Como el de verdad: la nota al final'},
   {g:'prueba',t:'escrito',ico:'✍️',n:'Examen escrito',d:'Responde con tus palabras y compara'},
   {g:'repasa',t:'hoy',ico:'📅',n:'Repaso de hoy',d:'Las que te tocan hoy para no olvidarlas'},
@@ -51,20 +52,32 @@ function retoHoy(materiaId){
   if(hoyN<META_RACHA)return{t:'quiz',txt:'Responde '+(META_RACHA-hoyN)+' preguntas más en un quiz para asegurar tu racha 🔥.'};
   return{t:'emparejar',txt:'¡Racha de hoy asegurada! Juega a emparejar para afianzar lo aprendido.'};
 }
+const IC_DIANA='<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>';
+/* Estudiar es la tarjeta principal de la materia: el botón "Empezar" va directo al repaso de hoy (o al reto del día)
+   y al tocar la tarjeta se abren todas las actividades. */
 function estudiarCajonHTML(m){
   const id=m.id,nC=getCardsTodas(id).length,nH=sesionHoy(id).length,nF=tarjetasFalladas(id).length;
-  const hoyN=rachaHoyN(),reto=retoHoy(id),nv=nivelDe();
+  const hoyN=rachaHoyN(),reto=retoHoy(id),nv=nivelDe(),gr=rachaInfo(state.progress.days);
   const cuenta={hoy:nH,falle:nF};
   const retoHTML=`<div class="reto">
-      <div class="retoTop"><span class="retoK">⭐ Reto de hoy</span><span class="chip">Nivel ${nv.nivel} · ${esc(nv.nombre)}</span></div>
+      <div class="retoTop"><span class="retoK">⭐ Reto de hoy</span><span class="chip">Nivel ${nv.nivel} · ${esc(nv.nombre)} · ${nv.xp} XP</span></div>
       <p class="retoTxt">${esc(reto.txt)}</p>
       <div class="retoRacha"><span>🔥 Racha de hoy</span><b>${Math.min(hoyN,META_RACHA)}/${META_RACHA}</b></div>
       <div class="bar"><i style="width:${Math.min(100,Math.round(hoyN/META_RACHA*100))}%"></i></div>
+      <p class="meta retoGracia">🛡️ ${gr.congelados.includes(gr.hoy-1)?'Ayer usaste tu día de gracia: tu racha sigue viva.':gr.graciaDisponible?'Tienes 1 día de gracia esta semana: si fallas un día, tu racha sigue viva.':'Ya usaste tu día de gracia de esta semana.'}</p>
+      ${misionesHTML()}
       ${reto.t?`<button class="pr retoBtn" data-action="openTool" data-tool="${reto.t}" data-mat="${id}">¡Vamos! ${esc(nombreAct(reto.t))} →</button>`:''}
     </div>`;
   const grupos=GRUPOS_ACT.map(([g,tit,col])=>`<div class="actGrupo"><h3 class="actGT">${tit}</h3><div class="actGrid">${ACTIVIDADES.filter(a=>a.g===g).map(a=>`<button type="button" class="act" style="--ac:${col}" data-action="openTool" data-tool="${a.t}" data-mat="${id}"><span class="actIco" aria-hidden="true">${a.ico}</span><b>${a.n}</b><small>${a.d}</small>${cuenta[a.t]?`<em class="actN" aria-label="${cuenta[a.t]} pendientes">${cuenta[a.t]}</em>`:''}</button>`).join('')}</div></div>`).join('');
-  const cuerpo=`${retoHTML}${alcanceHTML(id)}${grupos}`;
-  return `<div class="estudiarDw">${dwHTML('m:'+id+':est','Estudiar',pluralMv(nC,'tarjeta','tarjetas')+' · '+ACTIVIDADES.length+' actividades'+(nH?' · '+nH+' para hoy':''),cuerpo,'🎯',nH||'')}</div>`;
+  const k='m:'+id+':est',ab=dwAbierto(k),bid='dwB-'+k.replace(/[^\w-]/g,'_');
+  const go=nH?{t:'hoy',l:'Empezar · '+nH+' para hoy'}:reto.t?{t:reto.t,l:'Empezar · '+nombreAct(reto.t)}:null;
+  return `<section class="dw estHero${ab?' open':''}" data-key="dw-${esc(k)}">
+    <div class="ehTop">
+      <button type="button" class="dwHead ehHead" data-action="toggleDw" data-k="${esc(k)}" aria-expanded="${ab}" aria-controls="${bid}"><span class="dnum ehIco" aria-hidden="true">${IC_DIANA}</span><span class="dwT"><b>Estudiar</b><small>${pluralMv(nC,'tarjeta','tarjetas')} · ${ACTIVIDADES.length} actividades${nH?' · '+nH+' para hoy':''}</small></span><span class="chev" aria-hidden="true">▼</span></button>
+      ${go?`<button type="button" class="pr ehGo" data-action="openTool" data-tool="${go.t}" data-mat="${id}">${esc(go.l)}</button>`:''}
+    </div>
+    <div class="dwBody" id="${bid}"><div class="dwInner"><div class="dwPad">${retoHTML}${alcanceHTML(id)}${grupos}</div></div></div>
+  </section>`;
 }
 /* Estrellas y pantalla final comunes a los juegos */
 const estrellasDe=p=>p>=0.9?3:p>=0.7?2:p>=0.4?1:0;
@@ -110,16 +123,22 @@ function distractoresDe(c,pool){
   const todos=ia.concat(shuffle(otros));
   return todos.length>=3?todos.slice(0,3):null;
 }
+/* tipos: 'mixto' (variadas), 'mc' (opción múltiple), 'vf' (verdadero o falso) o 'hueco' (completar).
+   Verdadero o falso usa la afirmación falsa de la tarjeta o, si no tiene, una de sus opciones incorrectas.
+   Completar solo existe en tarjetas que traen la frase con el hueco; en las demás se pregunta con opción múltiple. */
+const tieneHueco=c=>!!(c.hueco&&limpioT(c.hueco.r)&&String(c.hueco.o||'').includes('____'));
 function tipoPara(c,tipos){
   if(tipos==='mc')return 'mc';
-  const op=['mc','mc'];                                                                     // la opción múltiple pesa más
-  if(limpioT(c.falsa)&&limpioT(c.falsa)!==limpioT(c.back))op.push('vf');
-  if(c.hueco&&limpioT(c.hueco.r)&&String(c.hueco.o||'').includes('____'))op.push('hueco');
+  if(tipos==='vf')return 'vf';
+  if(tipos==='hueco')return tieneHueco(c)?'hueco':'mc';
+  const op=['mc','mc','vf'];                                                                // la opción múltiple pesa más
+  if(tieneHueco(c))op.push('hueco','hueco');
   return op[Math.floor(Math.random()*op.length)];
 }
 function preguntaDe(c,d,tipos){
   const tipo=tipoPara(c,tipos);
-  if(tipo==='vf'){const v=Math.random()<0.5;return{card:c,tipo,enun:c.front,afirm:v?c.back:c.falsa,correcta:v?'Verdadero':'Falso',options:['Verdadero','Falso'],selected:null}}
+  const falsa=limpioT(c.falsa)&&limpioT(c.falsa)!==limpioT(c.back)?c.falsa:d[0];
+  if(tipo==='vf'){const v=Math.random()<0.5;return{card:c,tipo,enun:c.front,afirm:v?c.back:falsa,correcta:v?'Verdadero':'Falso',options:['Verdadero','Falso'],selected:null}}
   if(tipo==='hueco')return{card:c,tipo,enun:c.hueco.o,correcta:c.hueco.r,options:[],selected:null};
   return{card:c,tipo:'mc',enun:c.front,correcta:c.back,options:shuffle([c.back,...d]),selected:null};
 }
@@ -178,6 +197,7 @@ function comenzarQuiz(){
   toolState={questions,idx:0,score:0,corteId};
   render();
 }
+const TIPOS_PREG=[['mixto','🎲 Mixto'],['mc','🔠 Opción múltiple'],['vf','✅ Verdadero o falso'],['hueco','✍️ Completar']];
 function quizSetupHTML(isExam,escrito){
   const m=state.materias.find(x=>x.id===route.materiaId);
   const cortes=state.cortes.filter(c=>c.materiaId===m.id);
@@ -200,7 +220,8 @@ function quizSetupHTML(isExam,escrito){
     <label class="lbl" for="quizN">Número de preguntas</label>
     <select class="fld" id="quizN" data-action="quizN">${opcionesN.map(x=>`<option value="${x}" ${toolState.n===x?'selected':''}>${x}</option>`).join('')}<option value="0" ${toolState.n===0||toolState.n>=cards.length?'selected':''}>Todas (${cards.length})</option></select>
     ${escrito?'':`<label class="lbl" for="quizTipos">Tipos de pregunta</label>
-    <select class="fld" id="quizTipos" data-action="quizTipos"><option value="mixto" ${toolState.tipos!=='mc'?'selected':''}>Variadas: opción múltiple, verdadero/falso y completar</option><option value="mc" ${toolState.tipos==='mc'?'selected':''}>Solo opción múltiple</option></select>`}
+    <div class="tipoChips" role="group" aria-label="Tipos de pregunta">${TIPOS_PREG.map(([k,l])=>`<button type="button" class="tChip${toolState.tipos===k?' on':''}" data-action="quizTiposChip" data-v="${k}" aria-pressed="${toolState.tipos===k}">${l}</button>`).join('')}</div>
+    ${toolState.tipos==='hueco'&&!cards.some(tieneHueco)?'<p class="meta" style="margin:6px 0 0">Las tarjetas de este corte no traen frases para completar: se preguntarán con opción múltiple.</p>':''}`}
     <div class="premio" style="margin-top:14px"><b>🔥 Racha de hoy: ${hoyN}/${META_RACHA} preguntas</b>
       <div class="bar"><i style="width:${Math.min(100,Math.round(hoyN/META_RACHA*100))}%"></i></div>
       <p class="meta" style="margin:6px 0 0">Las primeras ${META_RACHA} preguntas del día aseguran tu racha. Las demás cuentan como práctica extra: puedes hacer todas las que quieras y quedan en tu historial.</p></div>
@@ -297,7 +318,8 @@ function falleSetupHTML(m){
 function cerrarSesionPractica(){
   toolState.fxFin=true;
   mutate(s=>{
-    const att={id:uid(),materiaId:route.materiaId,type:route.tool,score:toolState.score,total:toolState.questions.length,date:Date.now(),porCorte:porCorteDe(toolState.questions),corteId:toolState.corteId||null};
+    const att={id:uid(),materiaId:route.materiaId,type:route.tool,score:toolState.score,total:toolState.questions.length,date:Date.now(),porCorte:porCorteDe(toolState.questions),corteId:toolState.corteId||null,
+      xp:toolState.xp||0,combo:toolState.mejor||0,tablero:toolState.meta?1:0};
     s.attempts.push(att);
     toolState.premios=registrarSesion(att);
   });
@@ -351,6 +373,8 @@ function startTool(tool,materiaId){
     toolState={cards:sesionHoy(materiaId),idx:0,flipped:false,known:0,seen:0};
   }else if(tool==='falle'){
     toolState={setup:true,error:'',temasEx:null};
+  }else if(tool==='tablero'){
+    toolState=armarTablero(materiaId);
   }else if(tool==='comparar'){
     const other=state.materias.find(m=>m.id!==materiaId);
     toolState={materiaId2:other?other.id:null};
@@ -397,6 +421,7 @@ function viewToolHTML(){
   else if(tool==='concepto')body=toolConceptoHTML();
   else if(tool==='emparejar')body=toolEmparejarHTML();
   else if(tool==='repaso')body=toolRepasoHTML();
+  else if(tool==='tablero')body=tableroHTML();
   else if(tool==='comparar')body=toolCompararHTML(m);
   else if(tool==='progreso')body=toolProgresoHTML(m);
   else if(tool==='referencias')body=toolReferenciasHTML(m);
@@ -590,6 +615,11 @@ function huecoHTML(q,instante,contesto,acierto){
   if(!contesto)return `<input class="fld" id="huecoInput" autocomplete="off" autocapitalize="off" placeholder="Escribe la palabra o frase que falta" maxlength="80"><button class="pr" data-action="answerHueco" style="margin-top:8px">Comprobar</button>`;
   return `<div class="sec optBtn ${instante?(acierto?'ok pop':'no shake'):'chosen'}" style="cursor:default">${esc(q.selected)}</div>${instante&&!acierto?`<p class="meta" style="margin:6px 0 0">Respuesta esperada: <b>${esc(q.correcta)}</b></p>`:''}`;
 }
+/* Para repasar: al final, las preguntas falladas con la respuesta correcta y su explicación */
+function paraRepasarHTML(questions){
+  const mal=questions.filter(q=>!esAcierto(q));
+  return `<div class="repasar"><h3>📌 Para repasar</h3>${mal.length?mal.map(q=>`<div class="repItem"><b>${esc(q.enun).replace('____','<span class="hueco">____</span>')}${q.tipo==='vf'?' «'+esc(q.afirm)+'»':''}</b><span>Correcta: <b>${esc(q.correcta)}</b>${q.selected&&q.selected!=='(sin respuesta)'?' · tú: '+esc(q.selected):''}</span>${explicacionHTML(q.card&&q.card.exp)}</div>`).join(''):'<p class="meta" style="margin:0">No fallaste ninguna. ¡Perfecto! 🎉</p>'}</div>`;
+}
 function corteChipHTML(){
   const c=state.cortes.find(x=>x.id===toolState.corteId);
   return c?`<div class="chips" style="margin:-4px 0 8px"><span class="chip">📁 ${esc(c.name)||'(corte sin nombre)'}</span></div>`:'';
@@ -611,6 +641,7 @@ function toolQuizHTML(isExam){
     <p class="resMsg">${msg}</p>
     <p class="meta">Resultado: <b>${score} / ${questions.length}</b> · ${pct}%${(state.cortes.find(x=>x.id===toolState.corteId)||{}).name?' · '+esc(state.cortes.find(x=>x.id===toolState.corteId).name):''}</p>
     ${premiosHTML()}
+    ${isExam?'':paraRepasarHTML(questions)}
     ${isExam?`<div class="resList">${questions.map((q,i)=>`<p class="meta resRow ${esAcierto(q)?'bien':'mal'}" style="--i:${Math.min(i,14)}">${i+1}. ${esc(q.enun)}${q.tipo==='vf'?' «'+esc(q.afirm)+'»':''} — ${esAcierto(q)?'✅':'❌ correcta: '+esc(q.correcta)}${esAcierto(q)?'':explicacionHTML(q.card&&q.card.exp)}</p>`).join('')}</div>`:''}
     <div class="row finBtns"><button class="pr" data-action="redoTool">Jugar otra vez</button><button class="sec" data-action="backMateria" data-id="${route.materiaId}">Elegir otra actividad</button></div></div>`;
   }
@@ -623,7 +654,7 @@ function toolQuizHTML(isExam){
   ${corteChipHTML()}
   <div class="bar qbar"><i style="width:${prog1}%;--from:${prog0}%"></i></div>
   ${isExam?`<button type="button" class="toggleChip ${examInstantaneo?'on':''}" data-action="toggleInstante" ${contesto?'disabled':''}>⚡ Ver si acerté al instante: ${examInstantaneo?'Sí':'No'}</button>`:''}
-  ${instante&&combo>=2?`<div class="comboChip">🔥 ${combo} seguidas</div>`:''}
+  ${instante?`<div class="marcador"><span class="chip">⭐ ${toolState.xp||0} XP</span>${combo>=2?`<span class="comboChip">🔥 Combo x${combo}</span>`:''}</div>`:''}
   <div class="card qCard ${contesto?'answered':''}"><h3 style="margin-top:0">${enunciadoHTML(q)}</h3>
     ${q.tipo==='hueco'?huecoHTML(q,instante,contesto,acierto):q.options.map(o=>{
       let cls='sec optBtn';

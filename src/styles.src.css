@@ -968,7 +968,7 @@ html[data-fx="lite"] header#topbar,html[data-fx="off"] header#topbar{background:
 }
 
 /* ===== Estudiar: reto del día y actividades tipo juego ===== */
-.estudiarDw>.dw{border-color:var(--a);background:linear-gradient(145deg,var(--al),transparent 70%),var(--panel)}
+.estHero{border-color:var(--a);background:linear-gradient(145deg,var(--al),transparent 70%),var(--panel)}
 .reto{position:relative;border-radius:18px;padding:16px;margin:0 0 14px;background:linear-gradient(135deg,color-mix(in srgb,var(--a) 22%,transparent),color-mix(in srgb,#A99BE8 18%,transparent));border:1px solid color-mix(in srgb,var(--a) 45%,transparent)}
 .retoTop{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .retoK{font:700 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--a)}
@@ -1047,4 +1047,134 @@ html[data-fx="lite"] header#topbar,html[data-fx="off"] header#topbar{background:
   .empT.ok.pop{animation:anFlashOk .5s ease,anPop .45s ease}
   .empT.shake{animation:anShake .5s ease}
 }
-.estudiarDw .practice+p.meta{font-size:12px;line-height:1.45}
+.estHero .practice+p.meta{font-size:12px;line-height:1.45}
+
+/* ===== Materia por zonas: "De tu docente", "Tu estudio" y "Cortes y temas" (cortes como pestañas de carpeta) ===== */
+.matV .hero{flex-wrap:wrap}
+.matV .heroTxt{flex:1 1 220px;min-width:0}
+.heroOut{margin-left:auto;flex:none}
+.zona{margin-top:30px}
+.zl{margin:0 0 12px 4px;font:600 12px/1.2 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--m)}
+.zona>.dw:last-child{margin-bottom:0}
+@media(min-width:720px){
+  .zGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .zGrid>.zl{grid-column:1/-1;margin-bottom:-4px}
+  .zGrid>.dw{margin:0}
+  .zGrid>.dw.open,.zGrid>.dw:only-of-type{grid-column:1/-1}
+}
+/* Estudiar: tarjeta principal con el botón "Empezar" */
+.estHero{border-color:var(--a);background:linear-gradient(135deg,color-mix(in srgb,var(--a) 13%,transparent),transparent 60%),var(--panel)}
+.ehTop{display:flex;align-items:center;gap:8px;padding-right:16px}
+.ehHead{flex:1;min-width:0}
+.ehHead .dwT b{font-size:1.25em}
+.ehIco{width:52px!important;height:52px!important;color:var(--a)}
+.ehGo{flex:none;white-space:nowrap;padding:12px 20px;border-radius:12px;font-weight:600}
+@media(max-width:620px){.ehTop{flex-wrap:wrap;padding:0 14px 14px 0}.ehGo{width:calc(100% - 14px);margin-left:14px}}
+.estHero .practice+p.meta{font-size:12px;line-height:1.45}
+/* Notas del estudiante por corte (dentro de "Mi promedio") */
+.notasCortes .ncRow{display:grid;grid-template-columns:1fr 92px 92px;gap:10px;align-items:end;padding:8px 0;border-top:1px solid var(--b)}
+.notasCortes .ncRow b{align-self:center;font-weight:600}
+.notasCortes label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--m)}
+.notasCortes .fld{padding:7px 10px}
+/* Pestañas de carpeta: una por corte */
+.cTabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:30px 14px;padding-top:16px}
+.cTab{position:relative;display:block;width:100%;text-align:left;color:inherit;font:inherit;cursor:pointer;border:1px solid var(--b);border-radius:4px 16px 16px 16px;background:var(--glass);padding:20px 18px 16px;min-height:104px;transition:border-color .2s,background .2s,transform .15s}
+.cTab::before{content:"";position:absolute;left:-1px;top:-15px;width:72px;height:15px;border:1px solid var(--b);border-bottom:0;border-radius:10px 10px 0 0;background:var(--glass)}
+.cTab:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--a) 60%,var(--b))}
+.cTab.on{border-color:var(--a);background:color-mix(in srgb,var(--a) 11%,var(--panel))}
+.cTab.on::before{border-color:var(--a);background:color-mix(in srgb,var(--a) 11%,var(--panel))}
+.cTabN{margin:0 0 2px;font:600 19px/1.2 var(--serif);overflow-wrap:anywhere}
+.cTab .meta{font-size:13px}
+.cTabAdd{border-style:dashed;background:transparent;color:var(--m);display:grid;place-items:center;text-align:center;font-weight:600}
+.cTabAdd::before{border-style:dashed;background:transparent}
+@media(max-width:520px){.cTabs{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:26px 10px}.cTab{padding:16px 12px 12px;min-height:84px}.cTabN{font-size:16px}.cTab::before{width:52px}}
+.cPanel{margin-top:22px;border:1px solid color-mix(in srgb,var(--a) 45%,var(--b));border-radius:20px;background:var(--glass);padding:0 18px 18px}
+.cPanel[hidden]{display:none}
+.cpHead{display:flex;align-items:center;gap:14px;padding:20px 0 16px}
+.cpIco{flex:none;color:#E8C27A;display:grid}
+.cpTit{flex:1;min-width:0}
+.cpTit .ft{margin:0 0 6px;font:600 20px/1.2 var(--serif)}
+.cPanel .fAct{display:flex;gap:8px}
+.rBtn{width:42px;height:42px;border-radius:50%;border:1px solid var(--b);background:var(--card);color:var(--a);display:grid;place-items:center;padding:0;cursor:pointer}
+.rBtn svg{width:18px;height:18px}
+.rBtn[data-action="delCorte"]{color:var(--m)}
+.rBtn:hover{border-color:var(--a)}
+.cPanel.editing .corteEdit{display:block}
+.cHint{margin:18px 0 0 4px}
+/* Temas como tarjetas limpias: título, etiquetas y el botón de descarga a un lado */
+.cPanel .temaList{display:flex;flex-direction:column;gap:12px}
+.cPanel .temaList>details.s{margin:0;border:1px solid var(--b);border-radius:16px;background:var(--card)}
+.cPanel .temaList>details.s[open]{border-color:var(--a)}
+.temaList>.s>summary .temaHead{flex:1}
+.temaHead .tt{display:flex;align-items:flex-start;gap:10px;font-family:var(--serif);font-weight:600}
+.ttIco{flex:none;color:#E8C27A;display:grid;margin-top:2px}
+.ttIco svg{width:20px;height:20px}
+.temaHead .chips{padding-left:30px}
+.temaHead .chip{display:inline-flex;align-items:center;gap:5px}
+.tBtns{display:flex;align-items:center;gap:6px;flex:none}
+.dlBtn{width:44px;height:44px;border-radius:50%;border:1px solid color-mix(in srgb,#7FB3E6 45%,transparent);background:color-mix(in srgb,#7FB3E6 18%,transparent);color:#7FB3E6;display:grid;place-items:center;padding:0;cursor:pointer}
+:root[data-theme=light] .dlBtn,:root:not([data-theme=dark]) .dlBtn{color:#2F6BAA}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]) .dlBtn{color:#8fb4ff}}
+:root[data-theme=dark] .dlBtn{color:#8fb4ff}
+.dlBtn svg{width:18px;height:18px}
+@media(max-width:520px){.temaHead .chips{padding-left:0}.cPanel{padding:0 12px 14px}.temaList>.s>summary{padding:14px}}
+
+/* ===== XP, combos y misiones ===== */
+.misiones{margin:12px 0 4px}
+.misT{display:block;font-family:var(--serif);font-size:1.02em;margin-bottom:6px}
+.mision{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid color-mix(in srgb,var(--t) 9%,transparent)}
+.mision:first-of-type{border-top:0}
+.misIco{font-size:22px;flex:none}
+.misTx{flex:1;min-width:0;font-size:14px}
+.misTx .bar{margin:5px 0 0;height:7px}
+.misXp{flex:none;font-size:13px;color:var(--a)}
+.mision.ok .misXp{color:var(--ok)}
+.retoGracia{margin:-4px 0 4px;font-size:13px}
+.xpGan{display:flex;flex-direction:column;gap:2px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--b)}
+.xpGan b{font-size:1.15em;color:var(--a)}
+.xpMas{color:var(--ok)}
+.tipoChips{display:flex;flex-wrap:wrap;gap:8px}
+.tChip{border:1px solid var(--b);background:var(--card);color:inherit;border-radius:999px;padding:9px 14px;font:600 14px var(--sans);cursor:pointer}
+.tChip.on{border-color:var(--a);background:var(--al);color:var(--a)}
+/* Para repasar */
+.repasar{text-align:left;margin:16px 0 4px;max-width:640px;margin-inline:auto}
+.repasar h3{margin:0 0 8px}
+.repItem{display:flex;flex-direction:column;gap:3px;padding:10px 14px;margin-bottom:8px;border:1px solid var(--b);border-left:4px solid var(--no);border-radius:12px;background:var(--card);font-size:14px}
+.repItem>span{color:var(--m)}
+.repItem .fbExp{display:block;margin-top:2px}
+
+/* ===== Juego de tablero ===== */
+.tabJuego{display:grid;gap:16px}
+@media(min-width:900px){.tabJuego{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);align-items:start}.tabBoard{order:2;position:sticky;top:80px}}
+.tabBoard{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:14px;border:1px solid var(--b);border-radius:20px;background:var(--glass)}
+.tCel{position:relative;aspect-ratio:1;border-radius:12px;border:1px solid var(--b);background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:22px;transition:border-color .2s,background .2s,opacity .2s}
+.tCel em{position:absolute;top:3px;left:6px;font:600 10px var(--sans);font-style:normal;color:var(--m)}
+.tCel small{font:600 10px var(--sans);color:var(--m)}
+.tCel.k-q{background:color-mix(in srgb,#7FB3E6 9%,var(--card))}
+.tCel.k-l{background:color-mix(in srgb,#8ED1A4 11%,var(--card))}
+.tCel.k-c{background:color-mix(in srgb,#E8C27A 14%,var(--card))}
+.tCel.k-t{background:color-mix(in srgb,#E58FA8 12%,var(--card))}
+.tCel.k-f,.tCel.k-s{background:color-mix(in srgb,var(--a) 14%,var(--card))}
+.tCel.past{opacity:.5}
+.tCel.cur{border:2px solid var(--a);box-shadow:0 0 0 4px var(--glow);opacity:1}
+.tCel .tok{position:absolute;top:-10px;right:-6px;font-size:20px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+@media(max-width:520px){.tabBoard{gap:5px;padding:8px}.tCel{font-size:18px;border-radius:9px}.tCel small{display:none}.tCel .tok{font-size:16px;top:-8px;right:-4px}}
+.tabAct .tag{display:inline-block;border:1px solid var(--a);color:var(--a);border-radius:999px;padding:3px 11px;font:600 12px var(--sans)}
+.tabAct .tag.tagNo{border-color:var(--no);color:var(--no)}
+.tabQ{margin:12px 0}
+.tabT{margin:10px 0 6px}
+.tabX{margin:0 0 14px;font-size:16px}
+.tabTurno{display:flex;align-items:center;gap:12px}
+.tabTurno b{flex:1}
+.dado{font-size:40px;line-height:1;display:inline-block}
+.tabAviso{margin:10px 0 0}
+.tabStats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px auto;max-width:460px}
+.tabStats div{border:1px solid var(--b);border-radius:14px;background:var(--card);padding:12px 6px;display:flex;flex-direction:column}
+.tabStats b{font-size:1.4em;font-family:var(--serif)}
+.tabStats span{font-size:12px;color:var(--m)}
+@media(prefers-reduced-motion:no-preference){
+  .dado.gira{animation:tabGira .5s linear infinite}
+  .tCel.cur .tok{animation:tabSalto .3s ease}
+  @keyframes tabGira{to{transform:rotate(360deg)}}
+  @keyframes tabSalto{50%{transform:translateY(-8px)}}
+}
