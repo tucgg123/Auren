@@ -73,12 +73,12 @@ const json = (statusCode, obj) => ({
   body: JSON.stringify(obj)
 });
 
-// Tiempo máximo total esperando a la IA. Netlify corta las funciones síncronas a los 60 s
-// (límite fijo), así que dejamos 10 s de margen para poder responder con un error claro
-// en vez de que Netlify devuelva un 502 sin explicación.
-const LIMITE_MS = 50000;
-// En la función normal cada modelo tiene como mucho 25 s, así caben al menos dos modelos en los 50 s.
-const POR_MODELO_MS = 25000;
+// Tiempo máximo total esperando a la IA en la función normal. En este sitio Netlify corta las funciones
+// síncronas antes de los 50 s (con 50 s el chat recibía un 504 de Netlify sin explicación; con 25 s respondía bien),
+// así que se deja en 22 s para poder responder con un error claro. Los archivos grandes van por la versión en segundo plano.
+const LIMITE_MS = 22000;
+// Cada modelo tiene como mucho 11 s en la función normal, así caben al menos dos modelos.
+const POR_MODELO_MS = 11000;
 
 // Texto máximo que se analiza. Antes eran 20 000 caracteres y todo lo que viniera después se ignoraba;
 // ahora entra mucho más (el cupo de Gemini se cuenta por petición, no por tamaño). El navegador avisa si se recortó.
@@ -91,17 +91,17 @@ const LIMITE_PDF_B64 = 12 * 1024 * 1024; // ~8 MB de PDF en base64
 // minutos esperándolos en la siguiente petición (vive en la memoria de la instancia de Netlify).
 const LENTOS = new Map();
 const CASTIGO_LENTO_MS = 15 * 60 * 1000;
-function ordenModelos() {
+function ordenModelos(lista = MODELOS) {
   const ahora = Date.now();
   const lento = m => (LENTOS.get(m) || 0) > ahora;
-  return MODELOS.filter(m => !lento(m)).concat(MODELOS.filter(lento));
+  return lista.filter(m => !lento(m)).concat(lista.filter(lento));
 }
 
 async function llamarGemini(apiKey, prompt, limiteMs = LIMITE_MS, pdfBase64 = null, opciones = {}) {
   const esquema = opciones.esquema || ESQUEMA_RESPUESTA;
   const inicio = Date.now();
   let ultima;
-  for (const modelo of ordenModelos()) {
+  for (const modelo of ordenModelos(opciones.modelos)) {
     // opciones.porModeloMs: tiempo máximo con cada modelo. Si uno se demora, se pasa al siguiente en vez de
     // gastar todo el tiempo esperando (el chat lo usa para no quedarse colgado con un modelo lento o saturado).
     const finModelo = opciones.porModeloMs ? Date.now() + opciones.porModeloMs : Infinity;
@@ -555,4 +555,4 @@ ${bloqueDocumento}`;
 // Hecho por Sebastián Poveda y Santiago Romero. 2026
 
 // Piezas que reutiliza preguntar-tema.js (chat del estudiante sobre un tema)
-exports.util = { llamarGemini, verificarUsuario, tokenDe, json, ADMIN_EMAIL };
+exports.util = { llamarGemini, verificarUsuario, tokenDe, json, ADMIN_EMAIL, MODELOS };
