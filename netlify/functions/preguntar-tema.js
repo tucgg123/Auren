@@ -5,13 +5,15 @@
 // con un cupo diario pequeño por persona guardado en Firestore (iaChat/{uid}), igual que el cupo de archivos.
 // Cambia el cupo con la variable de entorno LIMITE_CHAT_DIARIO en Netlify (por defecto 15 preguntas al día).
 const { util } = require('./generar-tema.js');
-const { llamarGemini, verificarUsuario, tokenDe, json } = util;
+const { llamarGemini, verificarUsuario, tokenDe, json, MODELOS } = util;
 
 const PROYECTO = process.env.FIREBASE_PROJECT_ID || '';
 const LIMITE_CHAT = Number(process.env.LIMITE_CHAT_DIARIO) || 15;
-// Netlify corta las funciones normales a los 60 s: se deja margen. Cada modelo tiene como mucho 20 s;
-// si no responde, se prueba el siguiente (los "lite" son más rápidos).
-const LIMITE_MS = 50000, POR_MODELO_MS = 20000;
+// En este sitio Netlify corta las funciones normales antes de los 50 s y devuelve un 504 sin explicación
+// (pasó con 50 s; con 25 s funcionaba). Se deja en 22 s en total y 10 s por modelo: si uno no responde, se
+// prueba el siguiente. Para el chat van primero los "lite", que responden más rápido una pregunta corta.
+const LIMITE_MS = 22000, POR_MODELO_MS = 10000;
+const MODELOS_CHAT = MODELOS.filter(m => /lite/.test(m)).concat(MODELOS.filter(m => !/lite/.test(m)));
 const MAX_TEMA = 15000, MAX_PREGUNTA = 500, MAX_HISTORIAL = 6, MAX_MSG = 1200;
 const diaColombia = () => Math.floor((Date.now() - 5 * 3600 * 1000) / 86400000);
 const urlChat = uid => 'https://firestore.googleapis.com/v1/projects/' + PROYECTO + '/databases/(default)/documents/iaChat/' + uid;
@@ -88,7 +90,7 @@ NUEVA PREGUNTA DEL ESTUDIANTE: ${pregunta}
 Devuelve EXCLUSIVAMENTE un JSON: {"respuesta":"tu respuesta"}`;
 
   try {
-    const resp = await llamarGemini(apiKey, prompt, LIMITE_MS, null, { esquema: ESQUEMA, maxTokens: 2048, temperatura: 0.5, pensamiento: 'minimal', porModeloMs: POR_MODELO_MS });
+    const resp = await llamarGemini(apiKey, prompt, LIMITE_MS, null, { esquema: ESQUEMA, maxTokens: 2048, temperatura: 0.5, pensamiento: 'minimal', porModeloMs: POR_MODELO_MS, modelos: MODELOS_CHAT });
     if (!resp) return json(504, { error: 'La IA está muy ocupada en este momento y ningún modelo respondió a tiempo. Vuelve a intentarlo en un minuto.' });
     if (!resp.ok) {
       if (resp.status === 429) return json(429, { error: 'La IA está ocupada ahora mismo. Espera un minuto y vuelve a preguntar.' });
