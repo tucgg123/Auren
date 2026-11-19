@@ -8,7 +8,7 @@
 //
 // IMPORTANTE: esta función nunca debe lanzar errores. Si lo hiciera, Netlify la reintentaría
 // automáticamente y se volvería a gastar cuota de la IA.
-const { handler: generar } = require('./generar-tema.js');
+const { handler: generar, util } = require('./generar-tema.js');
 
 const PROYECTO = process.env.FIREBASE_PROJECT_ID || '';
 // Tiempos para la IA (el máximo de la plataforma es 15 minutos). Cada modelo tiene su propio tope: si uno no
@@ -72,6 +72,9 @@ exports.handler = async (event) => {
       console.error('Petición sin jobId válido o sin sesión.');
       return;
     }
+    // Se verifica la sesión ANTES de hacer cualquier cosa (generar-tema lo vuelve a comprobar, junto con el rol)
+    const usuario = await util.verificarUsuario(event);
+    if (!usuario) { console.error('Sesión no válida en segundo plano.'); return; }
 
     // Aviso inmediato de que la función arrancó: así la página sabe que sí llegó y no se queda esperando a ciegas.
     try { await guardar(jobId, token, { estado: 'trabajando' }); } catch (e) { console.error('No se pudo avisar que arrancó (revisa FIREBASE_PROJECT_ID y las reglas de Firestore):', e.message); }

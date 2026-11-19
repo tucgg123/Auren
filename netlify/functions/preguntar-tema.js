@@ -112,6 +112,6 @@ Devuelve EXCLUSIVAMENTE un JSON: {"respuesta":"tu respuesta"}`;
   } catch (err) {
     if (err.message === 'TIMEOUT') return json(504, { error: 'La IA tardó demasiado. Inténtalo de nuevo.' });
     console.error('Error inesperado en el chat:', err);
-    return json(500, { error: 'Error inesperado: ' + err.message });
+    return json(500, { error: 'Error inesperado en el servidor. Inténtalo de nuevo en un momento.' });
   }
 };

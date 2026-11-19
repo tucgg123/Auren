@@ -30,7 +30,10 @@
     X-Frame-Options = "DENY"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    # HTTPS forzado: Netlify ya redirige solo todo http:// a https:// (no hace falta una regla de redirección).
+    # HSTS le dice al navegador que, durante 2 años, entre a Auren SIEMPRE por https aunque alguien escriba http://
+    # o le pase un enlace http:// (así nadie en un wifi público puede interceptar la primera visita).
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains"
     Cross-Origin-Opener-Policy = "same-origin-allow-popups"
     # Política de contenido (CSP), ya aplicada de verdad. Qué permite y por qué:
     #   script-src  gstatic (SDK de Firebase), apis.google.com (login con Google), jsdelivr (pdf.js), cdnjs (JSZip)

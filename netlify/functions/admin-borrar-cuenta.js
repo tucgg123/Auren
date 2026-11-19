@@ -9,7 +9,7 @@ const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || '';
 const PROYECTO = process.env.FIREBASE_PROJECT_ID || '';
 // Primer admin: la variable ADMIN_EMAIL de Netlify si existe; si no, el correo de auren.config.json (el mismo que usan la página y las reglas)
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || require('../../auren.config.json').adminEmail || '').toLowerCase();
-const json = (statusCode, o) => ({ statusCode, headers: { 'content-type': 'application/json; charset=utf-8' }, body: JSON.stringify(o) });
+const json = (statusCode, o) => ({ statusCode, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }, body: JSON.stringify(o) });
 const b64u = x => Buffer.from(x).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const DOCS = () => 'https://firestore.googleapis.com/v1/projects/' + PROYECTO + '/databases/(default)/documents';
 
