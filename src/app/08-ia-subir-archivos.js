@@ -196,10 +196,6 @@ async function descargarOriginal(temaId){
     UI.alerta('No se pudo descargar el documento original'+(e&&e.code?detalleError(e):': '+(e&&e.message||'error'))+'.');
   }finally{descargando.delete(temaId)}
 }
-function docOriginalHTML(t){
-  const a=t.archivo,pdf=/pdf/i.test(a.tipo||'')||/\.pdf$/i.test(a.nombre||'');
-  return `<div class="origDoc"><span class="odIco" aria-hidden="true">${pdf?'📄':'📎'}</span><span class="odTxt"><b>Documento original</b><small>${esc(a.nombre||'documento')} · ${fmtTam(a.tam)}</small></span><button type="button" class="pr" data-action="descargarOriginal" data-id="${t.id}">⬇️ Descargar ${pdf?'PDF original':'archivo original'}</button></div>`;
-}
 function docsOriginalesHTML(m){
   const items=state.temas.filter(x=>x.materiaId===m.id&&x.archivo);
   if(!items.length)return '';
@@ -287,7 +283,7 @@ document.addEventListener('change',async e=>{
       const temaId=uid();temaIdNuevo=temaId;
       const secs=Array.isArray(data.secciones)?data.secciones.filter(x=>x&&x.titulo&&x.contenido).map(x=>({id:uid(),title:String(x.titulo),body:String(x.contenido),rel:String(x.relacion||'').trim(),...(()=>{const pr=(Array.isArray(x.puntos)?x.puntos:[]).map((p,i)=>({p:String(p).trim(),t:Array.isArray(x.tipos)?x.tipos[i]:null})).filter(o=>o.p).slice(0,6);return{puntos:pr.map(o=>o.p),tipos:pr.map(o=>ESQ_TIPOS.includes(o.t)?o.t:null)}})()})):[];
       const sel=$('iaCorte');const corteId=(sel&&sel.value)||(s.cortes.find(c=>c.materiaId===materiaId)||{}).id;
-      ui.open[corteId]=true;ui.open[temaId]=true;
+      ui.open[corteId]=true;ui.open[temaId]=true;ui.corteAb=ui.corteAb||{};ui.corteAb[materiaId]=corteId;
       const tema={id:temaId,materiaId,corteId,title:data.titulo,body:data.resumen||'',by:miNombre(),fuente:file.name,publicado:(materia&&materia.rol==='docente')?false:undefined,updatedAt:Date.now()};
       if(secs.length)tema.secciones=secs;
       s.temas.unshift(tema);

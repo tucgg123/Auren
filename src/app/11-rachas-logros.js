@@ -5,6 +5,8 @@
      badges:  insignias y estampillas desbloqueadas  { id: fecha }
      sellos:  etapas del Camino al éxito completadas { corteId: {t,materia,corte} }
      exams:   total de sesiones válidas (se conserva aunque borres una materia)
+     xp:      XP ganada respondiendo (aciertos, combos, misiones y metas del Juego de tablero)
+     dia:     lo de hoy: preguntas de racha, práctica extra, mejor combo y misiones cumplidas
    Sesión válida = terminar el Modo examen con al menos MIN_PREGUNTAS preguntas.
    ====================================================================== */
 const MIN_PREGUNTAS=5;     // mínimo de preguntas para que un examen cuente en el Camino al éxito y en las insignias de rendimiento
@@ -12,6 +14,19 @@ const META_RACHA=10;       // preguntas al día (Quiz o Modo examen) que asegura
 const HITOS_RACHA=[3,10,15,30];
 const NIVELES=['Novato','Aprendiz','Estudioso','Constante','Experto','Maestro','Leyenda'];
 let logrosTab='racha';
+/* XP por acierto: 10 y, con combo (aciertos seguidos), 5 más por cada uno hasta +20 (x2 → 15, x3 → 20 … x5 o más → 30) */
+const xpAcierto=combo=>10+Math.min(Math.max((combo||1)-1,0),4)*5;
+/* Misiones diarias: se cumplen con lo que haces hoy en Quiz, Modo examen, Lo que fallé y Juego de tablero */
+const MISIONES=[
+  {id:'preg',ico:'🎯',txt:'Responde '+META_RACHA+' preguntas',xp:20,meta:META_RACHA,val:d=>(d.racha||0)+(d.extra||0)},
+  {id:'combo',ico:'⚡',txt:'Logra un combo de 3',xp:30,meta:3,val:d=>d.combo||0},
+  {id:'tablero',ico:'🎲',txt:'Llega a la meta del Juego de tablero',xp:25,meta:1,val:d=>d.tablero||0}
+];
+function misionesHTML(){
+  const d=progresoHoy(),hechas=d.mis||{};
+  return `<div class="misiones"><b class="misT">Misiones de hoy</b>${MISIONES.map(mi=>{const v=Math.min(mi.val(d),mi.meta),ok=!!hechas[mi.id];
+    return `<div class="mision${ok?' ok':''}"><span class="misIco" aria-hidden="true">${ok?'✅':mi.ico}</span><div class="misTx"><span>${esc(mi.txt)}</span><div class="bar mini"><i style="width:${Math.round(v/mi.meta*100)}%"></i></div></div><b class="misXp">${ok?'Hecha':'+'+mi.xp+' XP'}</b></div>`}).join('')}</div>`;
+}
 let logrosMat=null;
 
 function fechaLocal(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
@@ -125,6 +140,13 @@ function registrarSesion(att){
   p.dia.racha+=res.aporte;p.dia.extra+=res.extra;
   att.racha=res.aporte;att.extra=res.extra;
   if(p.dia.racha>=META_RACHA&&!p.days.includes(hoy)){p.days.push(hoy);p.days.sort();res.diaNuevo=true}
+  /* XP de la sesión, mejor combo del día y misiones cumplidas (cada misión paga una sola vez por día) */
+  res.xp=Math.max(0,Math.round(+att.xp||0));
+  p.xp=(+p.xp||0)+res.xp;
+  p.dia.combo=Math.max(p.dia.combo||0,att.combo||0);
+  if(att.tablero)p.dia.tablero=(p.dia.tablero||0)+1;
+  p.dia.mis=p.dia.mis||{};res.misiones=[];
+  MISIONES.forEach(mi=>{if(!p.dia.mis[mi.id]&&mi.val(p.dia)>=mi.meta){p.dia.mis[mi.id]=1;p.xp+=mi.xp;res.misiones.push({ico:mi.ico,txt:mi.txt,xp:mi.xp})}});
   res.valida=p.days.includes(hoy);
   if(esValida(att))p.exams++;
   res.hoyRacha=p.dia.racha;res.extraHoy=p.dia.extra;
@@ -147,7 +169,7 @@ function porCorteDe(questions){
 
 function nivelDe(){
   const p=state.progress;
-  const xp=p.days.length*20+(Object.keys(p.badges).length+Object.keys(p.sellos).length)*50;
+  const xp=p.days.length*20+(Object.keys(p.badges).length+Object.keys(p.sellos).length)*50+Math.max(0,Math.round(+p.xp||0));
   const nivel=Math.floor(Math.sqrt(xp/50))+1;
   const base=50*(nivel-1)*(nivel-1),sig=50*nivel*nivel;
   return{xp,nivel,nombre:NIVELES[Math.min(nivel-1,NIVELES.length-1)],pct:Math.round((xp-base)/(sig-base)*100),faltan:sig-xp};
@@ -183,7 +205,7 @@ function avisarLogros(nuevos){
 function premiosHTML(){
   const pr=toolState&&toolState.premios;if(!pr)return'';
   const ok=pr.valida,falta=Math.max(0,pr.meta-pr.hoyRacha);
-  return `<div class="card premio"><b>🔥 Racha: ${pr.racha} día${pr.racha==1?'':'s'}</b>
+  return `<div class="card premio">${pr.xp||pr.misiones&&pr.misiones.length?`<div class="xpGan"><b>⭐ +${pr.xp+(pr.misiones||[]).reduce((s,m)=>s+m.xp,0)} XP</b><span class="meta">${pr.xp} de la partida${(pr.misiones||[]).length?' · '+pr.misiones.map(m=>m.ico+' '+esc(m.txt)+' +'+m.xp).join(' · '):''}</span></div>`:''}<b>🔥 Racha: ${pr.racha} día${pr.racha==1?'':'s'}</b>
     ${pr.diaNuevo?'<span class="chip chipOk">+1 hoy</span>':ok?'<span class="chip">Racha de hoy asegurada</span>':''}
     <div class="bar"><i style="width:${Math.min(100,Math.round(pr.hoyRacha/pr.meta*100))}%"></i></div>
     <p class="meta" style="margin:6px 0 0">Preguntas de racha hoy: <b>${Math.min(pr.hoyRacha,pr.meta)}/${pr.meta}</b>${ok?'':' · te faltan <b>'+falta+'</b> para asegurar la racha de hoy'}${pr.extraHoy?' · práctica extra de hoy: <b>'+pr.extraHoy+'</b>':''}</p>
@@ -214,10 +236,11 @@ function rachaTabHTML(){
     ${sigB?`<div class="bar"><i style="width:${Math.round(racha/sig*100)}%"></i></div><p class="meta" style="margin:0">Te faltan ${sig-racha} día${sig-racha==1?'':'s'} para ${sigB.icon} <b>${esc(sigB.nombre)}</b>.</p>`:'<p class="meta" style="margin:10px 0 0">🎉 ¡Completaste todos los hitos de racha!</p>'}
   </div>
   <div class="card" style="margin-top:12px">
-    <div class="rTop"><div class="rNum" style="font-size:1.6em">⭐ ${nv.nivel}</div><div><b>Nivel ${nv.nivel} · ${esc(nv.nombre)}</b><div class="meta">${nv.xp} puntos · faltan ${nv.faltan} para el siguiente nivel</div></div></div>
+    <div class="rTop"><div class="rNum" style="font-size:1.6em">⭐ ${nv.nivel}</div><div><b>Nivel ${nv.nivel} · ${esc(nv.nombre)}</b><div class="meta">${nv.xp} XP · faltan ${nv.faltan} para el nivel ${nv.nivel+1}</div></div></div>
     <div class="bar"><i style="width:${nv.pct}%"></i></div>
-    <p class="meta" style="margin:0">Sumas 20 puntos por cada día que estudias y 50 por cada insignia o etapa completada. No dependen de tus notas.</p>
+    <p class="meta" style="margin:0">Ganas XP con cada acierto (10, y hasta 30 si llevas un combo de aciertos seguidos), con las misiones del día, 20 por cada día de racha y 50 por cada insignia o etapa completada. No dependen de tus notas.</p>
   </div>
+  <div class="card" style="margin-top:12px">${misionesHTML()}</div>
   <p class="meta" style="margin-top:14px">Una sesión cuenta cuando terminas el <b>Modo examen</b> con al menos ${MIN_PREGUNTAS} preguntas. Cuenta una por día.</p>
   ${grupo('constancia','🔥 Constancia')}
   ${grupo('rendimiento','🎯 Rendimiento y metas')}

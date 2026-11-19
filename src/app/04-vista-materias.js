@@ -9,6 +9,9 @@ const IC_EDIT=SVG_A+'<path d="M4.5 19.5l.8-3.8L16.4 4.6a1.6 1.6 0 012.3 0l.7.7a1
 const IC_DEL=SVG_A+'<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>';
 const IC_MOVE=SVG_A+'<path d="M3 7.5V18a1.5 1.5 0 001.5 1.5h15A1.5 1.5 0 0021 18V9a1.5 1.5 0 00-1.5-1.5h-7.8L9.6 5H4.5A1.5 1.5 0 003 6.5z"/><path d="M10 13.5h6M13.5 11l2.5 2.5-2.5 2.5"/></svg>';
 const IC_ARR=SVG_A+'<path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+const IC_DOC=SVG_A+'<path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6"/></svg>';
+const IC_BAJAR=SVG_A+'<path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>';
+const IC_PERSONA='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>';
 function pluralMv(n,a,b){return n+' '+(n==1?a:b)}
 
 /* ================= VISTA: MIS MATERIAS ================= */
@@ -143,7 +146,10 @@ function matStatsHTML(nSem,mats){
     +dwHTML('st:car','Mi carrera',pluralMv(mats.length,'materia','materias')+' · '+pluralMv(nTarj,'tarjeta','tarjetas'),carrera,'🎓');
 }
 
-/* ================= VISTA: DETALLE DE MATERIA ================= */
+/* ================= VISTA: DETALLE DE MATERIA =================
+   Se organiza en zonas con título: "De tu docente" (exámenes, anuncios y documentos originales), "Tu estudio"
+   (Estudiar como tarjeta principal y el promedio) y "Cortes y temas" (cortes como pestañas de carpeta: uno abierto a la vez). */
+const zonaHTML=(titulo,cuerpo,cls)=>cuerpo?`<div class="zona${cls?' '+cls:''}"><p class="zl">${titulo}</p>${cuerpo}</div>`:'';
 function viewMateriaDetailHTML(materiaId){
   const m=state.materias.find(x=>x.id===materiaId);
   if(!m){goToView('materias');return'';}
@@ -154,14 +160,12 @@ function viewMateriaDetailHTML(materiaId){
   const cortes=state.cortes.filter(c=>c.materiaId===materiaId);
   const iaSel=cortes.some(c=>c.id===ui.iaCorte)?ui.iaCorte:(cortes[0]&&cortes[0].id);
   const mk=k=>'m:'+materiaId+':'+k,nTemas=state.temas.filter(x=>x.materiaId===materiaId).length;
-  if(m.rol!=='estudiante'&&(!ui.iaUso||(!ui.iaUso.cargando&&Date.now()-(ui.iaUso.t||0)>60000)))setTimeout(cargarUsoIA,0);   // se consulta el cupo al abrir la materia
-  return `
-    <button class="sec" data-action="${m.rol==='docente'?'backDocente':'backMaterias'}">${m.rol==='docente'?'← Espacio docente':'← '+esc(((state.semesters.find(s=>s.id===m.semesterId&&!s.oculto))||{}).name||'Mis materias')}</button>
-    <div class="hero" style="--mc:${matColor(m)}"><div class="heroDot"></div><div><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1><p class="sub">${esc((state.semesters.find(x=>x.id===m.semesterId)||{}).name||'')}${state.semesters.find(x=>x.id===m.semesterId)?' · ':''}${pluralMv(state.temas.filter(x=>x.materiaId===m.id).length,'tema','temas')} · ${pluralMv(getCardsTodas(m.id).length,'tarjeta','tarjetas')}${m.semestre?` · <span class="chip">Semestre ${m.semestre}${m.curso?' · Curso '+esc(m.curso):''}</span>`:''}</p></div></div>
-    ${m.rol==='docente'?docentePanelHTML(m):cajonesMateriaHTML(m)}
-    ${estudiarCajonHTML(m)}
-    ${m.rol==='docente'?'':dwHTML(mk('prom'),'Mi promedio en esta materia','<span id="corteAvgSub">'+promSubHTML(cortes)+'</span>',`<div id="corteAvgBox">${corteAvgHTML(cortes)}</div>`,'🧮')}
-    ${puedeSubir()?dwHTML(mk('ia'),'Generar tema con IA','Sube un PDF o una presentación y la IA arma el tema',`
+  const est=m.rol==='estudiante',sem=state.semesters.find(x=>x.id===m.semesterId);
+  if(!est&&(!ui.iaUso||(!ui.iaUso.cargando&&Date.now()-(ui.iaUso.t||0)>60000)))setTimeout(cargarUsoIA,0);   // se consulta el cupo al abrir la materia
+  const meta=[sem?esc(sem.name):'',pluralMv(nTemas,'tema','temas'),pluralMv(getCardsTodas(m.id).length,'tarjeta','tarjetas')].filter(Boolean).join(' · ')
+    +(est?' · Solo lectura, publicada por '+esc(nombreDocente(m)):'')
+    +(m.semestre?` · <span class="chip">Semestre ${m.semestre}${m.curso?' · Curso '+esc(m.curso):''}</span>`:'');
+  const ia=puedeSubir()?dwHTML(mk('ia'),'Generar tema con IA','Sube un PDF o una presentación y la IA arma el tema',`
         <p class="meta" style="margin-top:0">Sube un PDF o una presentación (.pptx), elige en qué corte guardarlo y la IA organiza el contenido en secciones y crea las tarjetas.</p>
         <label class="lbl" for="iaCorte">Guardar en</label>
         <select class="fld" id="iaCorte" data-action="iaCorteSel">${cortes.map(c=>`<option value="${c.id}" ${c.id===iaSel?'selected':''}>${esc(c.name)||'(corte sin nombre)'}</option>`).join('')}</select>
@@ -170,15 +174,19 @@ function viewMateriaDetailHTML(materiaId){
         <input type="file" id="pdfCompInput" accept=".pdf,application/pdf" style="display:none" aria-hidden="true" tabindex="-1">
         <button class="sec" data-action="pdfPick" style="margin-top:10px">🗜️ Comprimir un PDF</button>
         <div id="iaCupo" style="margin-top:10px">${cupoIAHTML()}</div>
-        <div id="iaStatus" class="meta" style="margin-top:8px"></div>`,'🤖'):''}
-    <div class="${m.rol==='estudiante'?'docRO':''}">
-      ${dwHTML(mk('cortes'),'Cortes y temas',pluralMv(cortes.length,'corte','cortes')+' · '+pluralMv(nTemas,'tema','temas'),
-        (cortes.map(c=>corteFolder(c,materiaId)).join('')||'<div class="empty">Esta materia aún no tiene cortes.</div>')
-        +`<button class="sec" style="margin-top:4px" data-action="addCorte" data-mat="${materiaId}">+ Agregar corte</button>`,'📁')}
+        <div id="iaStatus" class="meta" style="margin-top:8px"></div>`,'🤖'):'';
+  return `<div class="matV">
+    <button class="sec" data-action="${m.rol==='docente'?'backDocente':'backMaterias'}">${m.rol==='docente'?'← Espacio docente':'← '+esc(((state.semesters.find(s=>s.id===m.semesterId&&!s.oculto))||{}).name||'Mis materias')}</button>
+    <div class="hero" style="--mc:${matColor(m)}"><div class="heroDot"></div><div class="heroTxt"><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1><p class="sub">${meta}</p></div>${est?`<button class="sec heroOut" data-action="leaveShared" data-id="${m.id}">🚪 Salir de la materia</button>`:''}</div>
+    ${m.rol==='docente'?docentePanelHTML(m):zonaHTML(est?'De tu docente':'Tu grupo',cajonesMateriaHTML(m),'zGrid')}
+    ${zonaHTML('Tu estudio',estudiarCajonHTML(m)+(m.rol==='docente'?'':dwHTML(mk('prom'),'Mi promedio en esta materia','<span id="corteAvgSub">'+promSubHTML(cortes)+'</span>',`<div id="corteAvgBox">${corteAvgHTML(cortes)}</div>${est?notasCortesHTML(cortes):''}`,'🧮')))}
+    ${zonaHTML('Agregar contenido',ia)}
+    <div class="zona ${est?'docRO':''}"><p class="zl">Cortes y temas · ${pluralMv(cortes.length,'corte','cortes')} · ${pluralMv(nTemas,'tema','temas')}</p>
+      ${cortesZonaHTML(m,cortes)}
     </div>
-  `;
+  </div>`;
 }
-/* Cajones de arriba en la materia: lo del profesor (estudiante) o lo de compartir (materia propia) */
+/* Arriba de la materia: lo del profesor (estudiante) o lo de compartir (materia propia) */
 function cajonesMateriaHTML(m){
   const mk=k=>'m:'+m.id+':'+k;
   if(m.rol!=='estudiante')return dwHTML(mk('comp'),m.sharedId?'Materia compartida':'Estudiar con otras personas',m.sharedId?'Código, enlace e integrantes del grupo':'Comparte esta materia con tus compañeros',compartidoBoxHTML(m),'🤝');
@@ -186,43 +194,56 @@ function cajonesMateriaHTML(m){
   const exs=examenesDe(m),pend=exs.filter(ex=>!miIntento(m,ex.id)&&examAbierto(ex)).length;
   const ex=examenesEstudianteHTML(m);
   if(ex)out+=dwHTML(mk('ex'),'Exámenes de tu profesor',pend?pluralMv(pend,'examen por presentar','exámenes por presentar'):pluralMv(exs.length,'examen','exámenes'),ex,'📝',pend||'');
-  const nAn=anunciosDe(m).length,an=anunciosEstudianteHTML(m);
-  if(an)out+=dwHTML(mk('an'),'Anuncios de tu profesor',pluralMv(Math.min(nAn,3),'anuncio reciente','anuncios recientes'),an,'📣');
   const nDoc=state.temas.filter(x=>x.materiaId===m.id&&x.archivo).length,dc=docsOriginalesHTML(m);
   if(dc)out+=dwHTML(mk('docs'),'Documentos originales',pluralMv(nDoc,'archivo para descargar','archivos para descargar'),dc,'📎');
-  out+=dwHTML(mk('prof'),'Materia de '+esc(nombreDocente(m)),'Solo lectura · aquí puedes salir de la materia',estudianteDocenteBoxHTML(m),'👩‍🏫');
+  const nAn=anunciosDe(m).length,an=anunciosEstudianteHTML(m);
+  if(an)out+=dwHTML(mk('an'),'Anuncios de tu profesor',pluralMv(Math.min(nAn,3),'anuncio reciente','anuncios recientes'),an,'📣');
   return out;
+}
+/* El estudiante no edita los cortes (son de la materia de su docente), pero sí escribe sus notas y el peso de cada corte aquí */
+function notasCortesHTML(cortes){
+  if(!cortes.length)return '';
+  return `<div class="notasCortes"><p class="lbl" style="margin-top:14px">Tus notas por corte</p>${cortes.map(c=>`<div class="ncRow"><b>${esc(c.name)||'(corte sin nombre)'}</b>
+    <label><span>Peso %</span><input class="fld" type="number" inputmode="decimal" min="0" max="100" step="1" data-action="editCorteWeight" data-id="${c.id}" value="${c.weight}"></label>
+    <label><span>Nota</span><input class="fld" type="number" inputmode="decimal" min="0" max="${scaleMax()}" step="0.1" data-action="editCorteScore" data-id="${c.id}" value="${c.score??''}" placeholder="—"></label></div>`).join('')}</div>`;
 }
 function promSubHTML(cortes){
   const k=corteStats(cortes);
   return k.avg==null?'Sin notas todavía · meta '+fmtN(k.goal):fmtN(k.avg)+' de '+fmtN(k.scale)+' · meta '+fmtN(k.goal)+(k.avg>=k.goal?' ✅':'');
 }
-function corteFolder(c,materiaId){
+/* Cortes como pestañas de carpeta: al tocar una se abren sus temas y las demás se cierran. Se recuerda en ui.corteAb (por materia). */
+const IC_CARPETA='<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+function corteAbierto(materiaId){ui.corteAb=ui.corteAb||{};return ui.corteAb[materiaId]||''}
+function cortesZonaHTML(m,cortes){
+  const dueño=m.rol!=='estudiante';
+  if(!cortes.length)return `<div class="empty">Esta materia aún no tiene cortes.</div>${dueño?`<button class="sec" style="margin-top:10px" data-action="addCorte" data-mat="${m.id}">+ Agregar corte</button>`:''}`;
+  let ab=corteAbierto(m.id);
+  if(ab&&!cortes.some(c=>c.id===ab))ab='';
+  const nT=c=>state.temas.filter(t=>t.corteId===c.id).length;
+  return `<div class="cTabs" role="group" aria-label="Cortes">${cortes.map(c=>`<button type="button" class="cTab${c.id===ab?' on':''}" data-action="corteTab" data-mat="${m.id}" data-id="${c.id}" aria-expanded="${c.id===ab}" aria-controls="cp-${c.id}"><h3 class="cTabN">${esc(c.name)||'(corte sin nombre)'}</h3><span class="meta">${pluralMv(nT(c),'tema','temas')}</span></button>`).join('')}
+    ${dueño?`<button type="button" class="cTab cTabAdd" data-action="addCorte" data-mat="${m.id}"><span aria-hidden="true">＋</span> Agregar corte</button>`:''}</div>
+    ${cortes.map(c=>cortePanel(c,m,c.id===ab)).join('')}
+    <p class="meta cHint" ${ab?'hidden':''}>Toca una carpeta para ver sus temas.</p>`;
+}
+function cortePanel(c,m,abierto){
   const temas=state.temas.filter(t=>t.corteId===c.id).sort((a,b)=>b.updatedAt-a.updatedAt);
-  const hasScore=c.score!=null&&c.score!=='';
-  const open=ui.open[c.id]===true;                       // los cortes empiezan cerrados
-  return `<details class="folder" data-corte="${c.id}" ${open?'open':''}>
-    <summary>
-      <span class="fHead"><span class="ft">📁 ${esc(c.name)||'(corte sin nombre)'}</span>
-        <span class="chips"><span class="chip">${temas.length} tema${temas.length==1?'':'s'}</span><span class="chip">${fmtN(+c.weight||0)}%</span>${hasScore?`<span class="chip chipOk">Nota ${fmtN(c.score)}</span>`:''}</span></span>
-      <span class="fAct">
-        <button class="icon-btn" data-action="editCorte" data-id="${c.id}" title="Editar corte">✏️</button>
-        <button class="icon-btn" data-action="delCorte" data-id="${c.id}" title="Eliminar corte">🗑️</button>
-      </span>
-    </summary>
-    <div class="b">
-      <div class="corteEdit">
+  const hasScore=c.score!=null&&c.score!=='',dueño=m.rol!=='estudiante';
+  return `<section class="cPanel" id="cp-${c.id}" data-cpanel="${c.id}" ${abierto?'':'hidden'}>
+    <div class="cpHead"><span class="cpIco">${IC_CARPETA}</span><div class="cpTit"><h3 class="ft">${esc(c.name)||'(corte sin nombre)'}</h3>
+      <span class="chips"><span class="chip">${pluralMv(temas.length,'tema','temas')}</span><span class="chip">${fmtN(+c.weight||0)}%</span>${hasScore?`<span class="chip chipOk">Nota ${fmtN(c.score)}</span>`:''}</span></div>
+      ${dueño?`<span class="fAct"><button class="rBtn" data-action="editCorte" data-id="${c.id}" title="Editar corte" aria-label="Editar ${esc(c.name)}">${IC_EDIT}</button><button class="rBtn" data-action="delCorte" data-id="${c.id}" title="Eliminar corte" aria-label="Eliminar ${esc(c.name)}">${IC_DEL}</button></span>`:''}
+    </div>
+    ${dueño?`<div class="corteEdit">
         <div class="corteGrid">
           <div><label class="lbl">Nombre del corte</label><input class="fld" data-action="editCorteName" data-id="${c.id}" value="${esc(c.name)}" placeholder="Ej. Corte 1"></div>
           <div><label class="lbl">Peso (%)</label><input class="fld" type="number" min="0" max="100" step="1" data-action="editCorteWeight" data-id="${c.id}" value="${c.weight}"></div>
           <div><label class="lbl">Nota (0 a ${fmtN(scaleMax())})</label><input class="fld" type="number" min="0" max="${scaleMax()}" step="0.1" data-action="editCorteScore" data-id="${c.id}" value="${c.score??''}" placeholder="Sin nota"></div>
         </div>
         <div class="secFoot"><button class="sec" data-action="doneCorte" data-id="${c.id}">✓ Listo</button></div>
-      </div>
-      <div class="temaList">${temas.map(temaBlock).join('')||'<div class="empty">Este corte aún no tiene temas.</div>'}</div>
-      <button class="pr" style="margin-top:12px" data-action="addTema" data-mat="${materiaId}" data-corte="${c.id}">+ Agregar tema</button>
-    </div>
-  </details>`;
+      </div>`:''}
+    <div class="temaList">${temas.map(temaBlock).join('')||'<div class="empty">Aún no hay temas en este corte.</div>'}</div>
+    <button class="pr" style="margin-top:12px" data-action="addTema" data-mat="${m.id}" data-corte="${c.id}">+ Agregar tema</button>
+  </section>`;
 }
 function corteAvgHTML(cortes){
   const k=corteStats(cortes);
@@ -422,13 +443,12 @@ function temaBlock(t){
   if(tab==='chat'&&!conChat)tab='contenido';
   const tabs=[['contenido','Contenido'],...(hasSec?[['esquema','Esquema']]:[]),['tarjetas',`Tarjetas <span class="chip">${cards.length}</span>`],...(conApuntes?[['apuntes','📝 Mis apuntes']]:[]),...(conChat?[['chat','🤖 Pregúntale']]:[])];
   return `<details class="s" data-tema="${t.id}" ${ui.open[t.id]?'open':''}>
-    <summary><span class="temaHead"><span class="tt">📝 ${esc(t.title)||'(tema sin título)'}</span><span class="chips">${esDocenteMat(t.materiaId)?`<span class="chip ${t.publicado?'chipOk':''}">${t.publicado?'✅ Publicado':'📝 Borrador'}</span>`:''}${t.by&&sharedMateria(t.materiaId)?`<span class="chip" title="${esc(t.fuente||'')}">👤 ${esc(t.by)}</span>`:''}${hasSec?`<span class="chip">${t.secciones.length} sección${t.secciones.length==1?'':'es'}</span>`:''}<span class="chip">${cards.length} tarjeta${cards.length==1?'':'s'}</span></span></span>
-      ${t.archivo?`<button class="icon-btn" data-action="descargarOriginal" data-id="${t.id}" title="Descargar documento original" aria-label="Descargar documento original">⬇️</button>`:''}${esDocenteMat(t.materiaId)?`<button class="icon-btn" data-action="togglePublicar" data-id="${t.id}" title="${t.publicado?'Pasar a borrador':'Publicar a los estudiantes'}">${t.publicado?'📝':'✅'}</button>`:''}<button class="icon-btn" data-action="delTema" data-id="${t.id}" title="Eliminar tema">🗑️</button>
+    <summary><span class="temaHead"><span class="tt"><span class="ttIco">${IC_DOC}</span><span>${esc(t.title)||'(tema sin título)'}</span></span><span class="chips">${esDocenteMat(t.materiaId)?`<span class="chip ${t.publicado?'chipOk':''}">${t.publicado?'✅ Publicado':'📝 Borrador'}</span>`:''}${t.by?`<span class="chip" title="${esc(t.fuente||'')}">${IC_PERSONA} ${esc(t.by)}</span>`:''}${hasSec?`<span class="chip">${t.secciones.length} sección${t.secciones.length==1?'':'es'}</span>`:''}<span class="chip">${cards.length} tarjeta${cards.length==1?'':'s'}</span></span></span>
+      <span class="tBtns">${t.archivo?`<button class="dlBtn" data-action="descargarOriginal" data-id="${t.id}" title="Descargar documento original" aria-label="Descargar ${esc(t.title)||'documento original'}">${IC_BAJAR}</button>`:''}${esDocenteMat(t.materiaId)?`<button class="icon-btn" data-action="togglePublicar" data-id="${t.id}" title="${t.publicado?'Pasar a borrador':'Publicar a los estudiantes'}">${t.publicado?'📝':'✅'}</button>`:''}<button class="icon-btn" data-action="delTema" data-id="${t.id}" title="Eliminar tema">🗑️</button></span>
     </summary>
     <div class="b">
       <input class="fld tituloTema" data-action="editTemaTitle" data-id="${t.id}" value="${esc(t.title)}" placeholder="Título del tema">
       ${t.fuente?`<p class="meta" style="margin:4px 0 0">📎 ${esc(t.fuente)}${t.by?' · subido por '+esc(t.by):''}</p>`:''}
-      ${t.archivo?docOriginalHTML(t):''}
       <div class="tabsT">${tabs.map(([k,l])=>`<button type="button" data-action="temaTab" data-id="${t.id}" data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')}</div>
       <div class="tp" data-panel="contenido" ${tab==='contenido'?'':'hidden'}>
         <div class="temaTools">${ttsBtn('ttsTema','data-id="'+t.id+'"','🔊 Escuchar el tema')}${controlesMediosHTML(t)}</div>
