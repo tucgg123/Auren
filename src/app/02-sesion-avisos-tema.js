@@ -4,6 +4,7 @@ document.querySelectorAll('[data-authtab]').forEach(b=>b.onclick=()=>{
   authMode=b.dataset.authtab;
   document.querySelectorAll('[data-authtab]').forEach(x=>x.classList.toggle('on',x===b));
   $('authSubmit').textContent=authMode==='login'?'Iniciar sesión':'Crear cuenta';
+  $('authPass').autocomplete=authMode==='login'?'current-password':'new-password';   // el navegador propone una contraseña fuerte al registrarse
   $('authError').hidden=true;
 });
 function mapAuthError(err){
@@ -14,7 +15,7 @@ function mapAuthError(err){
     'auth/wrong-password':'Contraseña incorrecta.',
     'auth/invalid-credential':'Correo o contraseña incorrectos.',
     'auth/email-already-in-use':'Ya existe una cuenta con ese correo. Prueba iniciar sesión.',
-    'auth/weak-password':'La contraseña debe tener al menos 6 caracteres.',
+    'auth/weak-password':'La contraseña es muy débil. Usa al menos 8 caracteres, con letras y números.',
     'auth/too-many-requests':'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
     'auth/network-request-failed':'Sin conexión a internet.',
     'auth/unauthorized-domain':'Este dominio no está autorizado en Firebase (Authentication > Settings > Authorized domains).',
@@ -27,10 +28,19 @@ function mapAuthError(err){
 $('authForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const email=$('authEmail').value.trim(),pass=$('authPass').value;
-  $('authError').hidden=true;$('authSubmit').disabled=true;
+  $('authError').hidden=true;
+  /* Al crear la cuenta se pide una contraseña de al menos 8 caracteres con letras y números.
+     La contraseña nunca se guarda en Auren: Firebase Authentication la guarda cifrada con hash (scrypt). */
+  if(authMode!=='login'&&(pass.length<8||!/[A-Za-z]/.test(pass)||!/[0-9]/.test(pass))){
+    $('authError').textContent='La contraseña debe tener al menos 8 caracteres, con letras y números.';$('authError').hidden=false;return;
+  }
+  $('authSubmit').disabled=true;
   try{
     if(authMode==='login') await auth.signInWithEmailAndPassword(email,pass);
-    else await auth.createUserWithEmailAndPassword(email,pass);
+    else{
+      const cred=await auth.createUserWithEmailAndPassword(email,pass);
+      try{await cred.user.sendEmailVerification()}catch(e){console.warn('No se pudo enviar el correo de verificación:',e)}   // confirma que el correo es suyo
+    }
   }catch(err){
     $('authError').textContent=mapAuthError(err);$('authError').hidden=false;
   }finally{

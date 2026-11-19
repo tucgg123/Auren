@@ -44,7 +44,7 @@
     </div>
     <form id="authForm">
       <input id="authEmail" type="email" placeholder="Correo electrónico" required autocomplete="email">
-      <input id="authPass" type="password" placeholder="Contraseña (mínimo 6 caracteres)" required minlength="6" autocomplete="current-password">
+      <input id="authPass" type="password" placeholder="Contraseña (mínimo 8 caracteres)" required minlength="8" maxlength="128" autocomplete="current-password">
       <button class="pr" type="submit" id="authSubmit">Iniciar sesión</button>
     </form>
     <p id="authError" class="authError" hidden></p>
@@ -92,7 +92,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore-compat.js"></script>
 <script src="firebase-init.js"></script>
-<script src="assets/app.330263d9.js" defer></script>
+<script src="assets/app.1f92d715.js" defer></script>
 
 </body>
 </html>

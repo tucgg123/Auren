@@ -69,7 +69,8 @@ const ESQUEMA_RESPUESTA = {
 
 const json = (statusCode, obj) => ({
   statusCode,
-  headers: { 'content-type': 'application/json; charset=utf-8' },
+  // no-store: las respuestas son personales y nunca deben quedar guardadas en cachés intermedias
+  headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' },
   body: JSON.stringify(obj)
 });
 
@@ -319,6 +320,7 @@ async function revisarLimiteHora(uid, token) {
 // Hecho por Sebastián Poveda y Santiago Romero. 2026 · punto de entrada de la función
 exports.handler = async (event) => {
   // Diagnóstico: GET ?diagnostico=1 dice qué variables de entorno están definidas (nunca sus valores) y a qué proyecto apunta.
+  // Solo dice sí/no por variable y el id del proyecto (que ya es público en la página); nunca valores secretos.
   if (event.httpMethod === 'GET' && event.queryStringParameters && event.queryStringParameters.diagnostico) {
     return json(200, {
       variables: {
@@ -548,7 +550,7 @@ ${bloqueDocumento}`;
       return json(504, { error: 'La IA tardó demasiado en responder. Prueba con un archivo más corto o inténtalo de nuevo en un momento.' });
     }
     console.error('Error inesperado:', err);
-    return json(500, { error: 'Error inesperado: ' + err.message });
+    return json(500, { error: 'Error inesperado en el servidor. Inténtalo de nuevo en un momento.' });
   }
 };
 
