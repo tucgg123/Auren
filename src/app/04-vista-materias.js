@@ -65,7 +65,7 @@ function viewMateriasHTML(){
   }
   return `<div class="mv"><div class="mv-col">
     <div class="viewhead"><div><h1>Mis materias</h1><p class="sub">${pluralMv(sems.length,'carpeta','carpetas')} y ${pluralMv(todas.length,'materia','materias')}</p></div>
-      <span class="row" style="margin:0"><button class="sec" data-action="semDlg">📈 Promedio por carpeta</button><button class="pr" data-action="addSemester">+ Carpeta</button></span></div>
+      <span class="row vhBtns" style="margin:0"><button class="sec" data-action="joinSharedPrompt">🔗 Unirme con código</button><button class="sec" data-action="semDlg">📈 Promedio por carpeta</button><button class="pr" data-action="addSemester">+ Carpeta</button></span></div>
     ${invitacionesHTML()}
     ${guiaHTML()}
     ${repasoHoyHTML()}
@@ -164,8 +164,8 @@ function viewMateriaDetailHTML(materiaId){
   const mk=k=>'m:'+materiaId+':'+k,nTemas=state.temas.filter(x=>x.materiaId===materiaId).length;
   const est=m.rol==='estudiante',sem=state.semesters.find(x=>x.id===m.semesterId);
   if(!est&&(!ui.iaUso||(!ui.iaUso.cargando&&Date.now()-(ui.iaUso.t||0)>60000)))setTimeout(cargarUsoIA,0);   // se consulta el cupo al abrir la materia
-  const meta=[sem&&!sem.oculto?esc(sem.name):'',est?'Solo lectura, publicada por '+esc(nombreDocente(m)):''].filter(Boolean).join(' · ')
-    +(m.semestre?` · <span class="chip">Semestre ${m.semestre}${m.curso?' · Curso '+esc(m.curso):''}</span>`:'');
+  const metaTxt=[sem&&!sem.oculto?esc(sem.name):'',est?'Solo lectura, publicada por '+esc(nombreDocente(m)):''].filter(Boolean).join(' · ');
+  const meta=metaTxt+(m.semestre?`${metaTxt?' · ':''}<span class="chip">Semestre ${m.semestre}${m.curso?' · Curso '+esc(m.curso):''}</span>`:'');
   const ia=puedeSubir()?dwHTML(mk('ia'),'Generar tema con IA','Sube un PDF o una presentación y la IA arma el tema',`
         <p class="meta" style="margin-top:0">Sube un PDF o una presentación (.pptx), elige en qué corte guardarlo y la IA organiza el contenido en secciones y crea las tarjetas.</p>
         <label class="lbl" for="iaCorte">Guardar en</label>

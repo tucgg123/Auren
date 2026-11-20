@@ -103,11 +103,23 @@ service cloud.firestore {
           && soloCambia(['members', 'memberNames'])
           && seAgregaA() )
         ||
-        // Unirse por invitación del docente: el correo verificado debe tener una invitación
+        // Unirse por invitación del docente: el correo verificado (en minúsculas) debe tener una invitación
         ( !esMiembro()
           && request.auth.token.email_verified == true
-          && exists(/databases/$(database)/documents/invitaciones/$(id + '_' + request.auth.token.email))
-          && get(/databases/$(database)/documents/invitaciones/$(id + '_' + request.auth.token.email)).data.get('estado', 'pendiente') != 'rechazada'
+          && exists(/databases/$(database)/documents/invitaciones/$(id + '_' + request.auth.token.email.lower()))
+          && get(/databases/$(database)/documents/invitaciones/$(id + '_' + request.auth.token.email.lower())).data.get('estado', 'pendiente') != 'rechazada'
+          && soloCambia(['members', 'memberNames'])
+          && seAgregaA() )
+        ||
+        // Unirse con el código de clase del docente: el código tiene que estar activo en la materia y la persona
+        // tiene que haber registrado su uso en codigosClase/{código}/usos/{uid}, cosa que solo puede hacer quien conoce
+        // el código actual (si el docente lo cambia o lo desactiva, el código viejo deja de servir).
+        ( !esMiembro()
+          && resource.data.get('tipo', 'compartida') == 'docente'
+          && resource.data.get('codigo', '') is string
+          && resource.data.get('codigo', '') != ''
+          && get(/databases/$(database)/documents/codigosClase/$(resource.data.codigo)).data.sid == id
+          && existsAfter(/databases/$(database)/documents/codigosClase/$(resource.data.codigo)/usos/$(request.auth.uid))
           && soloCambia(['members', 'memberNames'])
           && seAgregaA() )
         ||
@@ -305,7 +317,7 @@ service cloud.firestore {
       allow read: if request.auth != null && (
         resource.data.ownerUid == request.auth.uid
         || ( request.auth.token.email_verified == true
-             && resource.data.email == request.auth.token.email ) );
+             && resource.data.email == request.auth.token.email.lower() ) );
 
       // Solo el dueño de la materia puede invitar a esa materia
       allow create: if request.auth != null
@@ -325,12 +337,38 @@ service cloud.firestore {
         ||
         // La persona invitada solo puede aceptar o rechazar
         ( request.auth.token.email_verified == true
-          && resource.data.email == request.auth.token.email
+          && resource.data.email == request.auth.token.email.lower()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'uid', 'nombre'])
           && request.resource.data.estado in ['aceptada', 'rechazada'] )
       );
 
       allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // Códigos de clase: codigosClase/{código} → { sid, ownerUid }. Cualquiera con sesión puede buscar UN código
+    // (get), pero nadie puede listarlos. Solo el dueño de la materia crea o borra el código de su materia.
+    match /codigosClase/{codigo} {
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow create: if request.auth != null
+        && codigo.matches('^[A-Z0-9]{6,10}$')
+        && request.resource.data.keys().hasOnly(['sid', 'ownerUid', 'creado'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.sid is string
+        && get(/databases/$(database)/documents/temarios/$(request.resource.data.sid)).data.ownerUid == request.auth.uid
+        && get(/databases/$(database)/documents/temarios/$(request.resource.data.sid)).data.get('tipo', 'compartida') == 'docente';
+      allow update: if false;
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+
+      // Constancia de que la persona escribió este código (la regla de unirse la exige). Solo la propia persona la crea.
+      match /usos/{u} {
+        allow get: if request.auth != null && request.auth.uid == u;
+        allow list: if false;
+        allow create, update: if request.auth != null && request.auth.uid == u
+          && exists(/databases/$(database)/documents/codigosClase/$(codigo))
+          && request.resource.data.keys().hasOnly(['creado']);
+        allow delete: if false;
+      }
     }
 
     // Banco de preguntas del docente: solo lo ve y lo edita él. Sirve para reutilizar preguntas entre exámenes y semestres.

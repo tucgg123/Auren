@@ -110,9 +110,9 @@ main#view{max-width:900px;margin:0 auto;padding:20px 16px 70px;animation:f .25s}
 
 /* Calendar */
 .calNav{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px}
-.calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px}
+.calGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-bottom:16px}
 .calGrid .dh{text-align:center;font-size:.75em;color:var(--m);font-style:normal}
-.dcell{aspect-ratio:1;border:1px solid var(--b);border-radius:8px;background:var(--c);position:relative;font-size:.85em}
+.dcell{aspect-ratio:1;min-width:0;padding:0;border:1px solid var(--b);border-radius:8px;background:var(--c);position:relative;font-size:.85em}
 .dcell.empty{border:0;background:transparent}
 .dcell.today{border-color:var(--a);font-weight:700}
 .dcell.sel{background:var(--al);border-color:var(--a)}
@@ -1214,3 +1214,10 @@ html[data-fx="lite"] header#topbar,html[data-fx="off"] header#topbar{background:
 .exHero .exVer .chev{font-size:18px;line-height:1;color:var(--a);transition:transform .2s}
 .dw.exHero.open .exVer .chev{transform:rotate(90deg)}
 .exHero .dwBody{flex:none}
+
+/* Código de clase del docente: grande y fácil de dictar en clase */
+.codigoClase{font:700 28px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.18em;margin:10px 0 2px;padding:10px 14px;border:1px dashed var(--line2);border-radius:12px;background:var(--card);display:inline-block;user-select:all;max-width:100%;overflow-wrap:anywhere}
+.estFila{justify-content:space-between;margin-top:6px}
+.estFila>span{min-width:0;overflow-wrap:anywhere}
+/* Celular: las pestañas (docente, logros…) bajan a otra línea en vez de esconderse a la derecha */
+@media(max-width:620px){.tabsT{flex-wrap:wrap;overflow-x:visible;gap:2px 0}.tabsT button{padding:9px 10px;font-size:14px;white-space:normal}}

@@ -306,15 +306,28 @@ function docentePanelHTML(m){
   </div>`;
 }
 function docenteEstudiantesHTML(m){
-  const invs=invitMap[m.sharedId]||[];
+  const invs=invitMap[m.sharedId]||[],meta=sharedMeta[m.sharedId]||{};
+  const conInv=new Set(invs.map(i=>i.uid).filter(Boolean));
+  const porCodigo=(meta.members||[]).filter(u=>u!==meta.ownerUid&&!conInv.has(u));   // entraron con el código de clase (sin invitación)
   const estado=i=>i.estado==='aceptada'?`<span class="chip chipOk">✅ Se unió</span>`:i.estado==='rechazada'?`<span class="chip">✖ Rechazó</span>`:`<span class="chip">⏳ Pendiente</span>`;
+  const cod=codigoClaseDe(m);
   return `<div class="card shareBox">
+    <b style="font-size:.9em">🔑 Código de clase</b>
+    ${cod?`<p class="meta" style="margin:4px 0 0">Tus estudiantes entran con este código desde «Mis materias» → «🔗 Unirme con código».</p>
+      <div class="codigoClase" aria-label="Código de clase">${esc(cod)}</div>
+      <div class="row"><button class="sec" data-action="classCodeCopy" data-id="${m.id}">📋 Copiar</button><button class="sec" data-action="classCodeNew" data-id="${m.id}">🔄 Cambiar</button><button class="sec" data-action="classCodeOff" data-id="${m.id}">⛔ Desactivar</button></div>`
+    :`<p class="meta" style="margin:4px 0 0">Crea un código corto para que tus estudiantes entren sin tener que invitarlos uno por uno. Puedes cambiarlo o desactivarlo cuando quieras.</p>
+      <button class="sec" style="margin-top:8px" data-action="classCodeNew" data-id="${m.id}">🔑 Crear código de clase</button>`}
+  </div>
+  <div class="card shareBox" style="margin-top:14px">
     <label class="lbl" for="invEmails" style="margin-top:0">Invitar estudiantes por correo</label>
     <textarea class="fld" id="invEmails" placeholder="correo1@ejemplo.com, correo2@ejemplo.com"></textarea>
     <p class="meta" style="margin:4px 0 0">Verán la invitación al iniciar sesión con ese mismo correo (con Google o con correo verificado).</p>
     <button class="pr" style="margin-top:8px" data-action="inviteStudents" data-id="${m.id}">📨 Invitar</button>
-    <div style="margin-top:14px"><b style="font-size:.85em">Estudiantes (${invs.length})</b></div>
-    ${invs.length?invs.map(i=>`<div class="row" style="justify-content:space-between;margin-top:6px"><span>${esc(i.nombre||i.email)} <span class="meta">${i.nombre?esc(i.email):''}</span> ${estado(i)}</span><button class="icon-btn" data-action="removeInvite" data-id="${m.id}" data-inv="${esc(i.id)}" title="Quitar" aria-label="Quitar a ${esc(i.nombre||i.email)}">🗑️</button></div>`).join(''):'<p class="meta" style="margin:6px 0 0">Aún no has invitado a nadie.</p>'}
+    <div style="margin-top:14px"><b style="font-size:.85em">Estudiantes (${invs.length+porCodigo.length})</b></div>
+    ${invs.map(i=>`<div class="row estFila"><span>${esc(i.nombre||i.email)} <span class="meta">${i.nombre?esc(i.email):''}</span> ${estado(i)}</span><button class="icon-btn" data-action="removeInvite" data-id="${m.id}" data-inv="${esc(i.id)}" title="Quitar" aria-label="Quitar a ${esc(i.nombre||i.email)}">🗑️</button></div>`).join('')}
+    ${porCodigo.map(u=>{const n=(meta.memberNames||{})[u]||'Estudiante';return `<div class="row estFila"><span>${esc(n)} <span class="chip chipOk">🔑 Entró con código</span></span><button class="icon-btn" data-action="removeMember" data-id="${m.id}" data-uid="${esc(u)}" title="Quitar" aria-label="Quitar a ${esc(n)}">🗑️</button></div>`}).join('')}
+    ${invs.length+porCodigo.length?'':'<p class="meta" style="margin:6px 0 0">Aún no tienes estudiantes. Invítalos por correo o dales el código de clase.</p>'}
     <div class="row" style="margin-top:14px"><button class="sec" data-action="delMateria" data-id="${m.id}">🗑️ Eliminar materia para todos</button></div>
   </div>`;
 }
