@@ -84,10 +84,80 @@ async function quitarInvitacion(m,invId){
     await db.collection('invitaciones').doc(invId).delete();
   }catch(e){console.error(e);UI.alerta('No se pudo completar la acción.')}
 }
+/* Quitar a un estudiante que entró con código (no tiene invitación) */
+async function quitarMiembro(m,u){
+  const meta=sharedMeta[m.sharedId]||{};
+  if(!u||u===meta.ownerUid)return;
+  if(!await UI.confirmar('¿Quitar a '+((meta.memberNames||{})[u]||'este estudiante')+' de la materia? Conservará una copia de lo que ya tenía, pero ya no recibirá más cambios.'))return;
+  try{const F=firebase.firestore.FieldValue;
+    await refTemario(m.sharedId).update({members:F.arrayRemove(u),['memberNames.'+u]:F.delete()})}
+  catch(e){console.error(e);UI.alerta('No se pudo quitar al estudiante'+detalleError(e)+'.')}
+}
 async function borrarInvitaciones(sid){
   const qs=await db.collection('invitaciones').where('sid','==',sid).where('ownerUid','==',currentUid).get();
   for(let i=0;i<qs.docs.length;i+=400){
     const b=db.batch();qs.docs.slice(i,i+400).forEach(d=>b.delete(d.ref));await b.commit();
+  }
+}
+
+/* ---------- Código de clase (docente) ----------
+   Código corto (sin letras que se confundan, como O/0 o I/1) que el docente le da a su clase. Vive en
+   codigosClase/{código} → {sid, ownerUid} y en el campo "codigo" de la materia. Cambiarlo o desactivarlo
+   hace que el código anterior deje de servir; quienes ya entraron siguen en la materia. */
+const LETRAS_CODIGO='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function nuevoCodigoClase(){
+  const r=new Uint32Array(7);crypto.getRandomValues(r);
+  return Array.from(r,n=>LETRAS_CODIGO[n%LETRAS_CODIGO.length]).join('');
+}
+function codigoClaseDe(m){const x=sharedMeta[m.sharedId];return x&&typeof x.codigo==='string'?x.codigo:''}
+async function generarCodigoClase(m){
+  const viejo=codigoClaseDe(m);
+  if(viejo&&!await UI.confirmar('¿Cambiar el código de clase? El código '+viejo+' dejará de servir. Quienes ya entraron siguen en la materia.'))return;
+  const F=firebase.firestore.FieldValue;
+  try{
+    let codigo='';
+    for(let i=0;i<5&&!codigo;i++){                // si el código ya existe (muy raro), las reglas no dejan crearlo: se prueba otro
+      const c=nuevoCodigoClase();
+      try{await db.collection('codigosClase').doc(c).set({sid:m.sharedId,ownerUid:currentUid,creado:F.serverTimestamp()});codigo=c}
+      catch(e){if(e.code!=='permission-denied')throw e}
+    }
+    if(!codigo)throw new Error('sin código');
+    await refTemario(m.sharedId).update({codigo});
+    if(viejo)await db.collection('codigosClase').doc(viejo).delete().catch(e=>console.error(e));
+    toast('🔑 Código de clase: '+codigo);
+  }catch(e){console.error(e);UI.alerta('No se pudo crear el código de clase'+detalleError(e)+'. Si dice permission-denied, falta publicar las reglas nuevas de Firestore.')}
+}
+async function desactivarCodigoClase(m){
+  const viejo=codigoClaseDe(m);if(!viejo)return;
+  if(!await UI.confirmar('¿Desactivar el código '+viejo+'? Nadie más podrá entrar con él. Quienes ya entraron siguen en la materia.'))return;
+  try{
+    await refTemario(m.sharedId).update({codigo:''});
+    await db.collection('codigosClase').doc(viejo).delete();
+  }catch(e){console.error(e);UI.alerta('No se pudo desactivar el código'+detalleError(e)+'.')}
+}
+/* Estudiante: entra a la materia de un docente con el código de clase */
+async function unirseConCodigoClase(codigo){
+  let paso='buscar el código';
+  try{
+    const c=await db.collection('codigosClase').doc(codigo).get();
+    if(!c.exists){UI.alerta('No existe ninguna clase con el código '+codigo+'. Revisa que esté bien escrito o pídeselo de nuevo a tu profesor.');return}
+    const sid=c.data().sid;
+    const ya=state.materias.find(x=>x.sharedId===sid);
+    if(ya){route={view:'materiaDetail',materiaId:ya.id};render();return}
+    const ref=refTemario(sid),F=firebase.firestore.FieldValue;
+    if(!await yaSoyMiembro(ref)){
+      paso='entrar a la materia';
+      await db.collection('codigosClase').doc(codigo).collection('usos').doc(currentUid).set({creado:F.serverTimestamp()});
+      await ref.update({members:F.arrayUnion(currentUid),['memberNames.'+currentUid]:miNombre().slice(0,120)});
+    }
+    paso='abrir la materia';
+    await abrirMateriaDocenteUnida(sid);
+    toast('✅ Entraste a la clase');
+  }catch(e){
+    console.error(e);
+    UI.alerta(e&&e.code==='permission-denied'&&paso==='entrar a la materia'
+      ?'Ese código ya no está activo. Pídele a tu profesor el código nuevo.'
+      :'No se pudo entrar a la clase (falló al '+paso+detalleError(e).replace(' (',': ').replace(/\)$/,'')+'). Inténtalo de nuevo.');
   }
 }
 
@@ -116,20 +186,36 @@ function escucharMisInvitaciones(){
       renderSeguro();
     },err=>console.error('Mis invitaciones:',err));
 }
+/* ¿Ya soy miembro de esta materia? (si no lo soy, las reglas no me dejan leerla y eso también cuenta como "no") */
+async function yaSoyMiembro(ref){
+  try{const snap=await ref.get();return !!(snap.exists&&(snap.data().members||[]).includes(currentUid))}
+  catch(e){return false}
+}
+/* Agrega a mi cuaderno la materia del docente a la que acabo de entrar (invitación o código) y la abre */
+async function abrirMateriaDocenteUnida(sid){
+  const d=(await refTemario(sid).get()).data()||{};
+  if(!state.materias.some(x=>x.sharedId===sid)){
+    mutate(s=>{
+      const sm=(d.tipo==='docente'&&d.semestre)?semPorNumero(s,d.semestre):semVisible(s);       // la materia queda en el semestre que definió el profesor
+      s.materias.push({id:uid(),name:d.name||'Materia',icon:d.icon||'📘',semestre:d.semestre,curso:d.curso,semesterId:sm.id,refs:'',sharedId:sid,rol:d.tipo==='docente'?'estudiante':undefined});
+    });
+  }
+  const m=state.materias.find(x=>x.sharedId===sid);
+  escucharCompartida(m);
+  route={view:'materiaDetail',materiaId:m.id};render();
+}
 async function aceptarInvitacion(invId){
   const inv=invitesPend.find(x=>x.id===invId);if(!inv)return;
+  let paso='entrar a la materia';
   try{
     const ref=refTemario(inv.sid),F=firebase.firestore.FieldValue;
-    await ref.update({members:F.arrayUnion(currentUid),['memberNames.'+currentUid]:miNombre()});
-    await db.collection('invitaciones').doc(invId).update({estado:'aceptada',uid:currentUid,nombre:miNombre()});
-    const d=(await ref.get()).data();
-    if(!state.materias.some(x=>x.sharedId===inv.sid)){
-      mutate(s=>s.materias.push({id:uid(),name:d.name,icon:d.icon||'📘',semesterId:semVisible(s).id,refs:'',sharedId:inv.sid,rol:'estudiante'}));
-    }
-    const m=state.materias.find(x=>x.sharedId===inv.sid);
-    escucharCompartida(m);
-    route={view:'materiaDetail',materiaId:m.id};render();
-  }catch(e){console.error(e);UI.alerta('No se pudo aceptar la invitación'+detalleError(e)+'. Inténtalo de nuevo.')}
+    if(!await yaSoyMiembro(ref))                  // si ya estaba dentro (por ejemplo, entró con código), solo falta marcar la invitación
+      await ref.update({members:F.arrayUnion(currentUid),['memberNames.'+currentUid]:miNombre().slice(0,120)});
+    paso='marcar la invitación como aceptada';
+    await db.collection('invitaciones').doc(invId).update({estado:'aceptada',uid:currentUid,nombre:miNombre().slice(0,120)});
+    paso='abrir la materia';
+    await abrirMateriaDocenteUnida(inv.sid);
+  }catch(e){console.error(e);UI.alerta('No se pudo aceptar la invitación (falló al '+paso+detalleError(e).replace(' (',': ').replace(/\)$/,'')+'). Inténtalo de nuevo.')}
 }
 async function rechazarInvitacion(invId){
   if(!await UI.confirmar('¿Rechazar esta invitación?'))return;
@@ -160,8 +246,7 @@ function estudianteDocenteBoxHTML(m){
 function docenteCard(m){
   const temas=state.temas.filter(t=>t.materiaId===m.id);
   const pub=temas.filter(t=>t.publicado).length;
-  const invs=invitMap[m.sharedId]||[];
-  const unidos=invs.filter(i=>i.estado==='aceptada').length;
+  const unidos=nEstudiantes(m);
   const nEx=Object.keys(exMap[m.sharedId]||{}).length;
   return `<div class="card matCard">
     <h3>${esc(m.icon||'📘')} ${esc(m.name)}</h3>
@@ -191,7 +276,7 @@ function pasosGuia(){
       {ok:mats.length>0,t:'Crea tu primera materia',d:'Con el botón «+ Crear materia» de arriba.'},
       {ok:temas.length>0,t:'Sube un PDF y deja que la IA arme el tema',d:'Dentro de la materia, en «Contenido». La IA hace el resumen, el esquema y las tarjetas.'},
       {ok:temas.some(t=>t.publicado),t:'Revisa y publica los temas',d:'Tus estudiantes solo ven los temas publicados (botón ✅ en cada tema).'},
-      {ok:mats.some(m=>nEstudiantes(m)>0||(invitMap[m.sharedId]||[]).length>0),t:'Invita a tus estudiantes',d:'En la pestaña «Estudiantes», con sus correos.'},
+      {ok:mats.some(m=>nEstudiantes(m)>0||(invitMap[m.sharedId]||[]).length>0),t:'Invita a tus estudiantes',d:'En la pestaña «Estudiantes»: con sus correos o con un código de clase.'},
       {ok:mats.some(m=>Object.keys(exMap[m.sharedId]||{}).length>0),t:'Crea tu primer examen',d:'En «Exámenes»: eliges los temas, revisas las preguntas y lo publicas.'}
     ];
   }
@@ -228,7 +313,11 @@ document.addEventListener('click',async e=>{
   if(a==='createDocente')crearDocente();
   else if(a==='backDocente')goToView('docente');
   else if(a==='inviteStudents'&&m)invitarEstudiantes(m);
+  else if(a==='classCodeNew'&&m)generarCodigoClase(m);
+  else if(a==='classCodeOff'&&m)desactivarCodigoClase(m);
+  else if(a==='classCodeCopy'&&m&&codigoClaseDe(m))copiar(codigoClaseDe(m),b);
   else if(a==='removeInvite'&&m)quitarInvitacion(m,b.dataset.inv);
+  else if(a==='removeMember'&&m)quitarMiembro(m,b.dataset.uid);
   else if(a==='togglePublicar')publicarTema(b.dataset.id);
   else if(a==='publishAll'&&m)publicarTodos(m);
   else if(a==='acceptInvite')aceptarInvitacion(b.dataset.inv);

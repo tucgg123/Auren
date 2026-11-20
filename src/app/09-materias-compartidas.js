@@ -313,6 +313,8 @@ async function compartirMateria(m){
 async function unirseCompartida(codigo){
   codigo=String(codigo||'').trim();
   const enlace=codigo.match(/[?&]unirse=([A-Za-z0-9]+)/);if(enlace)codigo=enlace[1];
+  const corto=codigo.replace(/[\s-]/g,'').toUpperCase();
+  if(/^[A-Z0-9]{6,10}$/.test(corto)){unirseConCodigoClase(corto);return}   // código de clase de un profesor (corto)
   if(!/^[A-Za-z0-9]{10,40}$/.test(codigo)){UI.alerta('Ese código no es válido. Pídele a tu compañero que te lo envíe de nuevo.');return}
   const ya=state.materias.find(x=>x.sharedId===codigo);
   if(ya){route={view:'materiaDetail',materiaId:ya.id};render();return}
@@ -353,7 +355,10 @@ async function abandonarCompartida(m,opts){
       for(let i=0;i<qs.docs.length;i+=400){
         const b=db.batch();qs.docs.slice(i,i+400).forEach(d=>b.delete(d.ref));await b.commit();
       }
-      if(eraDocente)await borrarInvitaciones(sid);
+      if(eraDocente){
+        await borrarInvitaciones(sid);
+        if(meta.codigo)await db.collection('codigosClase').doc(meta.codigo).delete().catch(e=>console.error(e));
+      }
       await ref.delete();
     }else{
       const F=firebase.firestore.FieldValue;
@@ -414,7 +419,7 @@ document.addEventListener('click',async e=>{
   const a=b.dataset.action;
   const m=b.dataset.id?state.materias.find(x=>x.id===b.dataset.id):null;
   if(a==='createShared')crearCompartida(b.dataset.sem);
-  else if(a==='joinSharedPrompt'){const c=await UI.prompt('Pega el código o el enlace de invitación:');if(c)unirseCompartida(c)}
+  else if(a==='joinSharedPrompt'){const c=await UI.prompt('Escribe el código de clase que te dio tu profesor (o pega el enlace de invitación):');if(c)unirseCompartida(c)}
   else if(a==='shareMateria'&&m)compartirMateria(m);
   else if(a==='copyInvite'&&m)copiar(location.origin+location.pathname+'?unirse='+m.sharedId,b);
   else if(a==='copyCode'&&m)copiar(m.sharedId,b);
