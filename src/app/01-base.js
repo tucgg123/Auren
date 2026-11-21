@@ -13,6 +13,7 @@ const AV=['🎓','📚','🦉','🐱','🦊','🐼','🌸','⭐','🔥','🌙'];
 function defaultState(){return{
   profile:{name:'',career:'',avatar:'🎓',examDate:'',scale:5,goal:4,notes:'',rol:''},
   theme:null,
+  colors:null,
   fx:null,
   semesters:[{id:uid(),name:'Semestre 1'}],
   materias:[],

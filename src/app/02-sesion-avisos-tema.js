@@ -246,7 +246,7 @@ function applyTheme(){
   if(state.theme)document.documentElement.setAttribute('data-theme',state.theme);
   else document.documentElement.removeAttribute('data-theme');
   try{state.theme?localStorage.setItem(TEMA_KEY,state.theme):localStorage.removeItem(TEMA_KEY)}catch(e){}
-  const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.setAttribute('content',temaEfectivo()==='dark'?'#060a12':'#f1f5fa');
+  applyColors();
   applyFx();
 }
 function updateThemeBtn(){
@@ -295,7 +295,63 @@ function cargarFondo(v){
     fx.insertAdjacentHTML('afterbegin',t);
   }).catch(()=>{fondoPedido=false});
 }
-state.theme=temaLocal();applyTheme();updateThemeBtn();   // también en la pantalla de acceso, antes de iniciar sesión (aplica los efectos)
+/* ================= COLORES PERSONALIZADOS =================
+   Cada usuario elige el color de acento (botones, enlaces, resaltados) y el color de fondo. Se guarda en su cuenta
+   (state.colors, viaja con sus datos a la nube) y en este dispositivo (auren_colores) para que tema-init.js lo pinte
+   antes de cargar. El fondo tiene un color para el modo claro y otro para el oscuro; el acento es uno solo y
+   tema-init.js lo aclara u oscurece lo necesario para que se lea bien en cada modo. */
+const COL_KEY='auren_colores',HEXRX=/^#[0-9a-f]{6}$/i;
+const ACENTOS=[['#2f66d6','Azul'],['#1a9aa0','Turquesa'],['#2c8a5a','Verde'],['#7a4fd6','Violeta'],['#d14d84','Rosa'],['#c98a12','Ámbar'],['#d9452b','Rojo coral'],['#4a5262','Grafito']];
+const FONDOS=[['Cielo','#eaf2ff','#07101f'],['Menta','#eaf7f0','#05140d'],['Lavanda','#f1edfb','#0f0a1c'],['Arena','#f7f1e6','#15110a'],['Rosa','#fbeef3','#180a10'],['Gris','#eef0f3','#0c0d10'],['Blanco','#ffffff','#000000']];
+const FONDO_DEF={claro:'#f1f5fa',oscuro:'#060a12'};
+function coloresValidos(c){
+  if(!c||typeof c!=='object')return null;
+  const acento=HEXRX.test(c.acento||'')?c.acento.toLowerCase():null;
+  const f=c.fondo&&typeof c.fondo==='object'&&HEXRX.test(c.fondo.claro||'')&&HEXRX.test(c.fondo.oscuro||'')?{claro:c.fondo.claro.toLowerCase(),oscuro:c.fondo.oscuro.toLowerCase()}:null;
+  return acento||f?{acento,fondo:f}:null;
+}
+function applyColors(){
+  state.colors=coloresValidos(state.colors);
+  try{state.colors?localStorage.setItem(COL_KEY,JSON.stringify(state.colors)):localStorage.removeItem(COL_KEY)}catch(e){}
+  try{window.aurenColores&&window.aurenColores.aplicar(state.colors)}catch(e){}
+  const osc=temaEfectivo()==='dark',f=state.colors&&state.colors.fondo;
+  const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.setAttribute('content',f?f[osc?'oscuro':'claro']:(osc?FONDO_DEF.oscuro:FONDO_DEF.claro));
+}
+function colorLocal(){try{return coloresValidos(window.aurenColores&&window.aurenColores.guardados())}catch(e){return null}}
+/* Cambia una parte de los colores, los aplica al instante y los guarda en la cuenta */
+function setColores(cambio,repintar){
+  const c=Object.assign({acento:null,fondo:null},state.colors||{},cambio);
+  state.colors=coloresValidos(c);
+  applyColors();if(currentUid)persist();
+  if(repintar)render(true);
+}
+function coloresCardHTML(){
+  const c=state.colors||{},ac=c.acento||null,fo=c.fondo||null,osc=temaEfectivo()==='dark';
+  const swA=(v,n)=>`<button type="button" class="colorSw${v?'':' def'}${(v||null)===ac?' on':''}" ${v?`style="--sw:${v}"`:''} data-action="colAcento" data-v="${v||''}" aria-label="${esc(n)}" aria-pressed="${(v||null)===ac}" title="${esc(n)}"></button>`;
+  const fSel=x=>fo&&fo.claro===x[1]&&fo.oscuro===x[2];
+  const swF=x=>`<button type="button" class="colorSw fondoSw${fSel(x)?' on':''}" style="--sw:${x[1]};--sw2:${x[2]}" data-action="colFondo" data-c="${x[1]}" data-o="${x[2]}" aria-label="Fondo ${esc(x[0])}" aria-pressed="${fSel(x)}" title="${esc(x[0])} (claro / oscuro)"></button>`;
+  const fActual=fo||FONDO_DEF,acHex=ac||(osc?'#f0a68c':'#b9472a');
+  /* Aviso si el fondo elegido para el modo que se ve ahora deja el texto difícil de leer */
+  let aviso='';
+  try{
+    const fm=fActual[osc?'oscuro':'claro'],txt=osc?'#e7ebf2':'#1a1c21';
+    if(fo&&window.aurenColores&&window.aurenColores.contraste(fm,txt)<4.5)aviso=`<p class="meta" style="color:var(--no);margin:8px 0 0">⚠️ Con este fondo el texto del modo ${osc?'oscuro':'claro'} se lee mal. Prueba un color ${osc?'más oscuro':'más claro'}.</p>`;
+  }catch(e){}
+  return `<div class="card"><h3>🎨 Colores</h3>
+    <p class="meta" style="margin-top:0">Elige el color de los botones y resaltados, y el color de fondo de la página. Se guarda en tu cuenta y te sigue en cualquier dispositivo.</p>
+    <label class="lbl">Color de acento</label>
+    <div class="colorGrid" role="group" aria-label="Color de acento">${swA(null,'Original (terracota)')}${ACENTOS.map(x=>swA(x[0],x[1])).join('')}</div>
+    <div class="colorPick"><label>Otro color <input type="color" data-action="colAcentoLibre" value="${acHex}" aria-label="Elegir otro color de acento"></label></div>
+    <label class="lbl" style="margin-top:16px">Color de fondo</label>
+    <div class="colorGrid" role="group" aria-label="Color de fondo"><button type="button" class="colorSw fondoSw def${fo?'':' on'}" data-action="colFondo" data-c="" data-o="" aria-label="Fondo original" aria-pressed="${!fo}" title="Original"></button>${FONDOS.map(swF).join('')}</div>
+    <div class="colorPick">
+      <label>Modo claro <input type="color" data-action="colFondoLibre" data-m="claro" value="${fActual.claro}" aria-label="Color de fondo para el modo claro"></label>
+      <label>Modo oscuro <input type="color" data-action="colFondoLibre" data-m="oscuro" value="${fActual.oscuro}" aria-label="Color de fondo para el modo oscuro"></label>
+    </div>${aviso}
+    <div class="colorPrev"><button type="button" class="pr" tabindex="-1">Botón</button><span class="chip" style="color:var(--a);border-color:var(--a)">Etiqueta</span><span style="color:var(--a);font-weight:600">Texto resaltado</span></div>
+    <div class="row"><button class="sec" data-action="colReset" ${state.colors?'':'disabled'}>↺ Volver a los colores originales</button></div></div>`;
+}
+state.colors=colorLocal();state.theme=temaLocal();applyTheme();updateThemeBtn();   // también en la pantalla de acceso, antes de iniciar sesión (aplica los efectos)
 document.addEventListener('visibilitychange',()=>document.documentElement.classList.toggle('fxPause',document.hidden));
 function datosCardHTML(){
   return `<div class="card"><h3>💾 Tus datos</h3>
@@ -336,3 +392,5 @@ $('themeBtn').onclick=()=>{
   applyTheme();updateThemeBtn();persist();
 };
 /* Hecho por Sebastián Poveda y Santiago Romero. 2026 — Auren · estilos */
+/* Al soltar el selector de color se repinta el perfil para marcar la muestra elegida y revisar el contraste */
+document.addEventListener('change',e=>{const a=e.target&&e.target.dataset&&e.target.dataset.action;if(a==='colAcentoLibre'||a==='colFondoLibre')render(true)});
