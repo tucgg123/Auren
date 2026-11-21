@@ -145,7 +145,7 @@ document.addEventListener('click',async e=>{
   else if(a==='pomoReset'){pomoReiniciar()}
   else if(a==='pomoSkip'){pomoSaltar()}
   else if(a==='borrarCuenta'){borrarMiCuenta()}
-  else if(a==='adminRecargar'){adminLista=null;adminError='';render(true)}
+  else if(a==='adminRecargar'){adminLista=null;adminError='';if(adminTab==='rachas')adminRachas=null;render(true)}
   else if(a==='adminBorrar'){borrarCuentaAjena(b.dataset.uid)}
   else if(a==='notaEsquema'){const tm=miTema(b.dataset.id),ta=document.querySelector('textarea[data-tema="'+b.dataset.id+'"]');if(tm&&ta){const e=esquemaTexto(tm);if(e){ta.value=(ta.value.trim()?ta.value.replace(/\s+$/,'')+'\n\n':'')+e;programarNota(tm.id,tm.materiaId,ta.value)}}}
   else if(a==='ttsNota'){const tm=miTema(b.dataset.id);if(tm)ttsLeer('Mis apuntes: '+tm.title,textoNota(tm.id))}

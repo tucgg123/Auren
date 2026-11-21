@@ -863,6 +863,19 @@ h1.brand .logoImg{margin-right:2px}
 .adminRow{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between;margin:0}
 .adminWho{display:grid;min-width:0;flex:1 1 220px;overflow-wrap:anywhere}
 .adminRow select{width:auto;flex:none}
+/* Rachas de los estudiantes (profesor y admin) */
+.rachaRes{margin:10px 0 12px}
+.rachaScroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--b);border-radius:12px;max-width:100%}
+.rachaTabla{width:100%;border-collapse:collapse;font-size:.9rem;min-width:640px}
+.rachaTabla th,.rachaTabla td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--b);vertical-align:middle}
+.rachaTabla thead th{font-size:.78em;text-transform:uppercase;letter-spacing:.03em;color:var(--m);background:var(--bg);position:sticky;top:0}
+.rachaTabla tbody th{font-weight:normal;overflow-wrap:anywhere;min-width:160px}
+.rachaTabla tbody th b{display:block}.rachaTabla tbody th .meta{display:block;font-size:.85em;margin:0}
+.rachaTabla tbody tr:last-child th,.rachaTabla tbody tr:last-child td{border-bottom:0}
+.rachaTabla td{white-space:nowrap}
+.rachaTabla tr.sinDatos{opacity:.7}.rachaTabla tr.sinDatos td{white-space:normal;min-width:220px}
+.miniStrip{display:inline-flex;gap:3px}
+.miniStrip .dot{width:20px;height:20px;font-size:.6em}
 
 /* ---- Carpetas de semestre y vista de semestre ---- */
 .folders{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:30px 18px;padding-top:16px;margin-top:6px}
