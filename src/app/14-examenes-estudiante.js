@@ -200,6 +200,7 @@ function viewPerfilDocenteHTML(){
       <label class="lbl">Institución</label><input class="fld" data-action="profileField" data-f="career" value="${esc(p.career)}" maxlength="80">
       <label class="lbl">Escala de notas de tus exámenes</label><select class="fld" data-action="setScale" style="max-width:220px">${[5,10,100].map(n=>`<option value="${n}" ${scaleMax()===n?'selected':''}>0 a ${n}</option>`).join('')}</select>
       <p class="meta" style="margin:6px 0 0">Se aplica a los exámenes nuevos. Los ya creados conservan su escala.</p>`,'✏️')}
+    ${dwHTML('pf:col','Colores','Color de acento y fondo de la página',coloresCardHTML(),'🎨')}
     ${dwHTML('pf:fx','Efectos visuales','Fondo animado y ahorro de batería',fxCardHTML(),'✨')}
     ${dwHTML('pf:datos','Tus datos','Descarga una copia de respaldo',datosCardHTML(),'💾')}
     ${dwHTML('pf:rol','Tu rol',esc(nombreRol(p.rol||'estudiante')),rolCardHTML(),'🎓')}
@@ -218,6 +219,8 @@ document.addEventListener('input',e=>{
   if(ea==='exHueco'&&exTom){const v=e.target.value;if(v.trim())exTom.respuestas[e.target.dataset.q]=v;else delete exTom.respuestas[e.target.dataset.q];guardarRespLocal();return}
   if(ea==='ttsRate'){ttsVelocidad(e.target.value);return}
   if(ea==='ttsVoz'){tts.voz=e.target.value;ttsGuardar();if(tts.estado==='leyendo'){ttsSeq++;try{speechSynthesis.cancel()}catch(x){}ttsSiguiente()}return}
+  if(ea==='colAcentoLibre'){setColores({acento:e.target.value});return}
+  if(ea==='colFondoLibre'){const f=Object.assign({},(state.colors&&state.colors.fondo)||FONDO_DEF);f[e.target.dataset.m]=e.target.value;setColores({fondo:f});return}
   if(ea==='fxSel'){state.fx=e.target.value||null;try{if(state.fx)localStorage.setItem('auren_fx',state.fx);else localStorage.removeItem('auren_fx')}catch(err){}applyFx();persist();return}
   if(ea==='alcanceSel'){
     const v=String(e.target.value||'all'),mid=route.materiaId;ui.alcance=ui.alcance||{};

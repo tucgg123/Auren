@@ -64,6 +64,7 @@ function viewPerfilHTML(){
       </div>
       <label class="lbl">Notas personales</label><textarea class="fld" data-action="profileField" data-f="notes" placeholder="Ideas, dudas, recordatorios…">${esc(p.notes)}</textarea>`,'✏️')}
     ${dwHTML('pf:avisos','Avisos y recordatorios',avisosActivos()?'Activados':'Desactivados',avisosCardHTML(),'🔔')}
+    ${dwHTML('pf:col','Colores','Color de acento y fondo de la página',coloresCardHTML(),'🎨')}
     ${dwHTML('pf:fx','Efectos visuales','Fondo animado y ahorro de batería',fxCardHTML(),'✨')}
     ${dwHTML('pf:datos','Tus datos','Descarga una copia de respaldo',datosCardHTML(),'💾')}
     ${dwHTML('pf:rol','Tu rol',esc(nombreRol(p.rol||'estudiante')),rolCardHTML(),'🎓')}
