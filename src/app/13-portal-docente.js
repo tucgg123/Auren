@@ -292,7 +292,7 @@ async function asegurarClave(m,exId){
 
 /* ======================= DOCENTE: pestañas de la materia ======================= */
 function docenteTabsHTML(m){
-  const tabs=[['contenido','📚 Contenido'],['examenes','📝 Exámenes'],['anuncios','📣 Anuncios'],['eventos','🗓️ Calendario'],['estudiantes','👥 Estudiantes']];
+  const tabs=[['contenido','📚 Contenido'],['examenes','📝 Exámenes'],['anuncios','📣 Anuncios'],['eventos','🗓️ Calendario'],['estudiantes','👥 Estudiantes'],['rachas','🔥 Rachas']];
   return `<div class="tabsT docTabs" style="margin:14px 0">${tabs.map(([k,t])=>`<button type="button" data-action="docTab" data-tab="${k}" class="${docTab===k?'on':''}">${t}</button>`).join('')}</div>`;
 }
 function docentePanelHTML(m){
@@ -335,7 +335,7 @@ function viewDocenteTabHTML(m){
   return `<button class="sec" data-action="backDocente">← Mis materias</button>
     <div class="viewhead" style="margin-top:14px"><h1>${esc(m.icon||'📘')} ${esc(m.name)}</h1></div>
     ${docenteTabsHTML(m)}
-    ${docTab==='examenes'?docenteExamenesHTML(m):docTab==='anuncios'?docenteAnunciosHTML(m):docTab==='eventos'?docenteEventosHTML(m):docenteEstudiantesHTML(m)}`;
+    ${docTab==='examenes'?docenteExamenesHTML(m):docTab==='anuncios'?docenteAnunciosHTML(m):docTab==='eventos'?docenteEventosHTML(m):docTab==='rachas'?docenteRachasHTML(m):docenteEstudiantesHTML(m)}`;
 }
 
 /* ---------- Seguimiento del grupo: junta todos los exámenes publicados de la materia ----------

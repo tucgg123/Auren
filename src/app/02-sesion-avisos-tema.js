@@ -90,6 +90,7 @@ auth.onAuthStateChanged(async user=>{
     marcarNavSegunRuta();
     render();
     startShared();
+    iniciarRachaPublica();
     iniciarAvisos();
     escucharNotas();
     escucharMisInvitaciones();
@@ -98,6 +99,7 @@ auth.onAuthStateChanged(async user=>{
   }else{
     const ovRol=document.getElementById('rolOverlay');if(ovRol)ovRol.remove();
     stopShared();
+    detenerRachaPublica();
     currentUid=null;
     sync.fallo='';sync.falloMateria='';sync.aviso='';sync.tamAlto=false;sync.soloLocal=false;pintarBanner();
     avisos=null;ttsParar();detenerNotas();adminLista=null;{const ap=$('avisosPanel');if(ap)ap.hidden=true}

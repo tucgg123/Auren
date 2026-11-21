@@ -25,6 +25,29 @@ service cloud.firestore {
         && d.get('nombre', '') is string && d.get('nombre', '').size() <= 120;
     }
 
+    // Resumen de la racha que publica cada estudiante (ver src/app/16-rachas-docente.js). Solo campos conocidos,
+    // con tipo y tamaño máximo; el correo tiene que ser el de la sesión (nadie publica a nombre de otra persona).
+    function rachaValida(d) {
+      return d.keys().hasOnly(['nombre', 'email', 'dias', 'mejor', 'totalDias', 'xp', 'nivel', 'actualizado'])
+        && d.nombre is string && d.nombre.size() <= 120
+        && d.email is string && d.email == request.auth.token.get('email', '')
+        && d.dias is list && d.dias.size() <= 400
+        && d.mejor is int && d.mejor >= 0 && d.mejor <= 100000
+        && d.totalDias is int && d.totalDias >= 0 && d.totalDias <= 100000
+        && d.xp is int && d.xp >= 0
+        && d.nivel is int && d.nivel >= 1 && d.nivel <= 100000
+        && d.actualizado == request.time;
+    }
+
+    // Racha de cada estudiante: la escribe solo el propio estudiante; la leen él y los admin (los admin pueden listarlas todas).
+    // Los profesores NO leen aquí: leen la copia que el estudiante deja en cada materia suya (temarios/{id}/rachas/{uid}).
+    match /rachas/{u} {
+      allow get: if request.auth != null && ( request.auth.uid == u || esAdmin() );
+      allow list: if esAdmin();
+      allow create, update: if request.auth != null && request.auth.uid == u && rachaValida(request.resource.data);
+      allow delete: if request.auth != null && ( request.auth.uid == u || esAdmin() );
+    }
+
     match /usuarios/{u} {
       allow get: if request.auth != null && (request.auth.uid == u || esAdmin());
       allow list: if esAdmin();
@@ -247,6 +270,16 @@ service cloud.firestore {
           && cId == request.resource.data.examId + '_' + request.resource.data.uid
           && request.resource.data.texto is string && request.resource.data.texto.size() <= 1000;
         allow delete: if request.auth != null && esDuenoMateria();
+      }
+
+      // Racha de cada estudiante en esta materia: la escribe solo el propio estudiante, y solo si es miembro (no el dueño).
+      // La lee el docente dueño de la materia (así ve y descarga las rachas de SU clase) y el propio estudiante.
+      match /rachas/{u} {
+        allow read: if request.auth != null && ( esDuenoMateria() || request.auth.uid == u );
+        allow create, update: if request.auth != null && request.auth.uid == u
+          && esMiembroMateria() && !esDuenoMateria()
+          && rachaValida(request.resource.data);
+        allow delete: if request.auth != null && ( request.auth.uid == u || esDuenoMateria() );
       }
 
       // Anuncios del docente para toda la materia: todos los miembros leen, solo el docente escribe.

@@ -362,6 +362,7 @@ async function abandonarCompartida(m,opts){
       await ref.delete();
     }else{
       const F=firebase.firestore.FieldValue;
+      if(!eraDocente)await borrarRachaMateria(sid);   // el profesor deja de ver la racha de quien se sale
       await refTemario(sid).update({members:F.arrayRemove(currentUid),['memberNames.'+currentUid]:F.delete()});
     }
   }catch(e){

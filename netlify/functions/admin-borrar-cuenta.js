@@ -108,6 +108,7 @@ exports.handler = async event => {
     };
     await borrarDoc('users/' + uid, tok);
     await borrarDoc('usuarios/' + uid, tok);
+    await borrarDoc('rachas/' + uid, tok);   // resumen de racha que ven los profesores y los admin
     await borrarDoc('iaUso/' + uid, tok);
     await borrarDoc('iaChat/' + uid, tok);
     await borrarDoc('iaHora/' + uid, tok);

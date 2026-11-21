@@ -563,7 +563,9 @@ function viewAdminHTML(){
   const L=adminLista||[],f=adminFiltro.trim().toLowerCase();
   const vis=L.filter(u=>!f||String(u.email||'').toLowerCase().includes(f)||String(u.nombre||'').toLowerCase().includes(f));
   const n=r=>L.filter(u=>u.rol===r).length;
-  return `<div class="viewhead"><h1>🛡️ Administración</h1><button class="sec" data-action="adminRecargar">↻ Actualizar</button></div>
+  const cab=`<div class="viewhead"><h1>🛡️ Administración</h1><button class="sec" data-action="adminRecargar">↻ Actualizar</button></div>${adminTabsHTML()}`;
+  if(adminTab==='rachas')return cab+adminRachasHTML();
+  return cab+`
   <p class="meta">${L.length} cuentas · ${n('estudiante')} estudiantes · ${n('profesor')} profesores · ${n('admin')} admin. Aquí asignas roles y borras cuentas.</p>
   <input class="fld" type="search" data-action="adminFiltro" placeholder="Buscar por nombre o correo" value="${esc(adminFiltro)}" aria-label="Buscar cuentas">
   ${adminError?`<div class="card shareBox" role="alert">${esc(adminError)}</div>`:''}
@@ -623,6 +625,7 @@ async function borrarMiCuenta(){
     await borrarColeccionPropia('bancoPreguntas/'+uidViejo+'/items');
     await borrarColeccionPropia('users/'+uidViejo+'/materias');
     await db.collection('users').doc(uidViejo).delete();
+    await db.collection('rachas').doc(uidViejo).delete().catch(e=>console.warn('No se pudo borrar el resumen de racha:',e));
     await db.collection('usuarios').doc(uidViejo).delete();
     await u.delete();
   }catch(e){
@@ -767,6 +770,7 @@ async function pushCloudNow(){
       nubeSubido.set('__raiz',global);
     }
     syncOk();
+    publicarRacha();                                   // resumen de la racha para el profesor y los admin (solo estudiantes)
   }catch(e){console.error('No se pudo sincronizar con la nube:',e);syncFallo(e)}
   finally{
     subiendo=false;
