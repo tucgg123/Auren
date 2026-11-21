@@ -344,6 +344,9 @@ document.addEventListener('click',async e=>{
     if(await UI.confirmar('¿Eliminar este evento?'))mutate(s=>s.events=s.events.filter(x=>x.id!==b.dataset.id));
   }
   else if(a==='setAvatar'){mutate(s=>s.profile.avatar=b.dataset.a);}
+  else if(a==='colAcento'){setColores({acento:b.dataset.v||null},true);}
+  else if(a==='colFondo'){setColores({fondo:b.dataset.c?{claro:b.dataset.c,oscuro:b.dataset.o}:null},true);}
+  else if(a==='colReset'){state.colors=null;applyColors();persist();render(true);toast('🎨 Colores originales');}
   else if(a==='logout'){if(await UI.confirmar('¿Cerrar sesión?'))auth.signOut();}
 });
 
