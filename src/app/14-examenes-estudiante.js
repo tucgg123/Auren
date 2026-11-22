@@ -220,8 +220,15 @@ document.addEventListener('input',e=>{
   if(ea==='exHueco'&&exTom){const v=e.target.value;if(v.trim())exTom.respuestas[e.target.dataset.q]=v;else delete exTom.respuestas[e.target.dataset.q];guardarRespLocal();return}
   if(ea==='ttsRate'){ttsVelocidad(e.target.value);return}
   if(ea==='ttsVoz'){tts.voz=e.target.value;ttsGuardar();if(tts.estado==='leyendo'){ttsSeq++;try{speechSynthesis.cancel()}catch(x){}ttsSiguiente()}return}
-  if(ea==='colAcentoLibre'){setColores({acento:e.target.value});return}
-  if(ea==='colFondoLibre'){const f=Object.assign({},(state.colors&&state.colors.fondo)||FONDO_DEF);f[e.target.dataset.m]=e.target.value;setColores({fondo:f});return}
+  if(ea==='colAcentoLibre'||ea==='colFondoLibre'){
+    const v=normHex(e.target.value);if(!v)return;                     // en el campo de texto, se espera a que el código esté completo
+    const caja=e.target.closest('.colorLibre');                         // sincroniza la rueda y el campo de texto sin repintar
+    if(caja)caja.querySelectorAll('input').forEach(i=>{if(i!==e.target)i.value=v});
+    const rueda=caja&&caja.querySelector('.colorRueda');if(rueda)rueda.style.setProperty('--sw',v);
+    if(ea==='colAcentoLibre')setColores({acento:v});
+    else{const f=Object.assign({},(state.colors&&state.colors.fondo)||FONDO_DEF);f[e.target.dataset.m]=v;setColores({fondo:f})}
+    return;
+  }
   if(ea==='fxSel'){state.fx=e.target.value||null;try{if(state.fx)localStorage.setItem('auren_fx',state.fx);else localStorage.removeItem('auren_fx')}catch(err){}applyFx();persist();return}
   if(ea==='alcanceSel'){
     const v=String(e.target.value||'all'),mid=route.materiaId;ui.alcance=ui.alcance||{};
