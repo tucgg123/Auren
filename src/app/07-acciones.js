@@ -30,6 +30,7 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('click',async e=>{
   const b=e.target.closest('[data-action]');if(!b)return;
+  if(b.matches('input[type=color]'))return;     // sin esto el preventDefault de abajo impedía abrir el selector de color del sistema
   e.preventDefault();
   const a=b.dataset.action;
 
