@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<!-- Hecho por Sebastián Poveda y Santiago Romero. 2026 · política de privacidad -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Política de privacidad · Auren</title>
+<meta name="description" content="Política de privacidad y uso de cookies de Auren.">
+<link rel="stylesheet" href="assets/styles.f2287da6.css">
+<script src="tema-init.js"></script>
+<meta name="theme-color" content="#16171c">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+</head>
+<body class="legalPage">
+<main class="legal">
+  <p class="legalVolver"><a href="/">← Volver a Auren</a> · <a href="terminos.html">Términos de servicio</a></p>
+  <h1>Política de privacidad</h1>
+  <!-- Si cambias algo importante, cambia también la versión aquí, en terminos.html y en TERMINOS_VERSION (src/app/17-terminos.js). -->
+  <p class="meta">Versión <b>2026-11-22</b> · vigente desde el 22 de noviembre de 2026</p>
+
+  <p>Esta política explica qué datos guarda <b>Auren</b>, para qué los usa, con quién los comparte y qué puedes hacer con ellos. Los responsables son Sebastián Poveda y Santiago Romero, creadores de Auren.</p>
+
+  <h2>1. Qué datos guardamos</h2>
+  <ul>
+    <li><b>Datos de tu cuenta</b>: correo electrónico, nombre (el que escribes o el de tu cuenta de Google), rol (estudiante, profesor o administrador), fecha de creación y la versión de estos términos que aceptaste, con su fecha. La contraseña la guarda Firebase Authentication cifrada; Auren nunca la ve.</li>
+    <li><b>Tu perfil y tu estudio</b>: carrera o institución, materias, temas, notas, calendario, apuntes personales, progreso de flashcards, rachas, logros y preferencias.</li>
+    <li><b>Contenido de las materias</b>: documentos y PDF que suben los profesores, el texto que se extrae de ellos, imágenes, enlaces de video, exámenes, anuncios y comentarios.</li>
+    <li><b>Actividad académica</b>: tus entregas de exámenes y un resumen de tu racha de estudio (días estudiados, mejor racha y nivel).</li>
+    <li><b>Uso de la IA</b>: contadores de cuántas veces usaste las funciones de IA por hora y por día, para aplicar los límites.</li>
+  </ul>
+  <p>No vendemos tus datos ni los usamos para publicidad.</p>
+
+  <h2>2. Quién puede ver tus datos</h2>
+  <ul>
+    <li><b>Tus apuntes personales</b> («Mis apuntes» y el tablero de post-it) son privados: ni tus profesores ni los administradores pueden leerlos.</li>
+    <li><b>Tus profesores</b> ven, en las materias suyas a las que te uniste, tu nombre, tus entregas de exámenes y el resumen de tu racha.</li>
+    <li><b>Los administradores</b> ven la lista de cuentas (nombre, correo y rol) y el resumen de rachas, para gestionar roles y cuentas.</li>
+    <li><b>Los demás miembros de una materia</b> ven tu nombre en esa materia.</li>
+  </ul>
+
+  <h2 id="ia">3. Inteligencia artificial (Google Gemini)</h2>
+  <p>Cuando un profesor sube un archivo (por ejemplo un PDF) para generar un tema, o cuando haces una pregunta en «Pregúntale a la IA», Auren envía ese contenido a la <b>API de Google Gemini</b> a través de funciones en nuestros servidores (Netlify). Gemini lo procesa para devolver el resumen, las flashcards, las preguntas o la respuesta, que luego se guardan en la materia.</p>
+  <ul>
+    <li>Los PDF se leen en tu navegador para extraer el texto. Si el PDF es escaneado (solo imágenes), el archivo se envía a Gemini para que lo lea.</li>
+    <li>Google trata ese contenido según los <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener">términos de la API de Gemini</a>. Según esos términos, cuando la API se usa sin facturación (nivel gratuito), Google puede usar el contenido para mejorar sus productos y personas pueden revisarlo; en el nivel de pago no lo usa para eso.</li>
+    <li>Por eso te pedimos <b>no enviar a la IA datos personales sensibles ni documentos confidenciales</b>.</li>
+  </ul>
+
+  <h2>4. Servicios de terceros</h2>
+  <ul>
+    <li><b>Google Firebase</b> (Authentication y Firestore): inicio de sesión y base de datos donde se guarda todo lo anterior.</li>
+    <li><b>Google Gemini</b>: procesamiento con inteligencia artificial, como se explica arriba.</li>
+    <li><b>Netlify</b>: aloja la página y ejecuta las funciones que hablan con Gemini.</li>
+    <li><b>Google Fonts, jsDelivr y cdnjs</b>: entregan las fuentes y algunas librerías (por ejemplo, el lector de PDF). Reciben tu dirección IP al descargarlas, como cualquier sitio web.</li>
+    <li><b>YouTube y Vimeo</b>: solo si un profesor agrega un video a un tema. YouTube se carga en su modo de privacidad mejorada.</li>
+  </ul>
+  <p>Estos servicios pueden procesar datos fuera de tu país, bajo sus propias políticas de privacidad.</p>
+
+  <h2 id="cookies">5. Cookies y almacenamiento en tu dispositivo</h2>
+  <p><b>Auren no usa cookies de analítica, publicidad ni rastreo.</b> Solo guarda en tu navegador lo necesario para funcionar:</p>
+  <ul>
+    <li><b>Sesión</b>: Firebase guarda tu inicio de sesión para que no tengas que entrar cada vez.</li>
+    <li><b>Uso sin internet</b>: una copia de tus datos y de la aplicación (caché de Firestore y del service worker) para que Auren abra rápido y funcione sin conexión. Se borra al cerrar sesión.</li>
+    <li><b>Preferencias</b>: modo claro u oscuro, colores, efectos visuales, voz del lector, configuración del Pomodoro y avisos.</li>
+    <li><b>Trabajo en curso</b>: por ejemplo, las respuestas de un examen que estás presentando, para no perderlas si se cierra la página.</li>
+  </ul>
+  <p>Como todo esto es estrictamente necesario para el servicio o lo eliges tú, no te pedimos un consentimiento aparte. Los videos de YouTube o Vimeo pueden guardar sus propias cookies cuando los reproduces. Puedes borrar todos los datos de Auren en tu navegador desde su configuración de privacidad.</p>
+
+  <h2>6. Cuánto tiempo los guardamos</h2>
+  <p>Mientras tengas tu cuenta. Al eliminarla se borran tus datos personales, tus apuntes y tu racha. Las entregas de exámenes pueden quedar en la materia del profesor como registro académico.</p>
+
+  <h2>7. Tus derechos</h2>
+  <p>De acuerdo con la normativa de protección de datos aplicable (en Colombia, la Ley 1581 de 2012), puedes conocer, actualizar, rectificar y suprimir tus datos, y revocar tu autorización:</p>
+  <ul>
+    <li>Edita tus datos desde tu <b>Perfil</b>.</li>
+    <li>Descarga una copia en <b>Perfil → Tus datos</b>.</li>
+    <li>Elimina tu cuenta en <b>Perfil → Cuenta → Eliminar mi cuenta</b>.</li>
+    <li>Para cualquier otra solicitud, escríbenos (abajo).</li>
+  </ul>
+
+  <h2>8. Menores de edad</h2>
+  <p>Si eres menor de edad, usa Auren con la autorización de tu madre, padre o representante legal, o de tu institución educativa. No pedimos más datos de los necesarios para el servicio.</p>
+
+  <h2>9. Seguridad</h2>
+  <p>La conexión siempre va cifrada (HTTPS), las reglas de la base de datos limitan quién puede leer cada cosa y las contraseñas las gestiona Firebase. Ningún sistema es 100 % seguro; si detectamos un problema que afecte tus datos, te avisaremos.</p>
+
+  <h2>10. Cambios y contacto</h2>
+  <p>Si cambiamos esta política de forma importante, publicaremos una versión nueva y te pediremos aceptarla al volver a entrar. Para preguntas o solicitudes sobre tus datos escríbenos a <a class="contacto" href="mailto:santiagoromerov2008@gmail.com">santiagoromerov2008@gmail.com</a>.</p>
+</main>
+</body>
+</html>

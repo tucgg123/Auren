@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/styles.10b7d903.css">
+<link rel="stylesheet" href="assets/styles.f2287da6.css">
 <script src="tema-init.js"></script>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#16171c">
@@ -45,10 +45,12 @@
     <form id="authForm">
       <input id="authEmail" type="email" placeholder="Correo electrónico" required autocomplete="email">
       <input id="authPass" type="password" placeholder="Contraseña (mínimo 8 caracteres)" required minlength="8" maxlength="128" autocomplete="current-password">
+      <label class="chkLinea" id="authTermsRow" hidden><input type="checkbox" id="authTerms"> <span>Acepto los <a href="terminos.html" target="_blank" rel="noopener">Términos de servicio</a> y la <a href="privacidad.html" target="_blank" rel="noopener">Política de privacidad</a>, incluido el uso de IA de Google Gemini para procesar documentos.</span></label>
       <button class="pr" type="submit" id="authSubmit">Iniciar sesión</button>
     </form>
     <p id="authError" class="authError" hidden></p>
     <p id="authLoading" class="meta" hidden>Conectando…</p>
+    <p class="legalLinks"><a href="terminos.html" target="_blank" rel="noopener">Términos de servicio</a> · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad y cookies</a></p>
   </div>
 </div>
 
@@ -92,7 +94,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore-compat.js"></script>
 <script src="firebase-init.js"></script>
-<script src="assets/app.5e4e6fa1.js" defer></script>
+<script src="assets/app.61756c79.js" defer></script>
 
 </body>
 </html>

@@ -19,10 +19,20 @@ service cloud.firestore {
     function esProfe() { return esAdminSemilla() || tieneRol(['profesor', 'admin']); }
     // Campos permitidos en usuarios/{uid}, con tipo y tamaño máximo (así nadie guarda basura ni textos gigantes)
     function usuarioValido(d) {
-      return d.keys().hasOnly(['rol', 'email', 'nombre', 'creado'])
+      return d.keys().hasOnly(['rol', 'email', 'nombre', 'creado', 'terminosVersion', 'terminosAceptados'])
         && d.rol in ['estudiante', 'profesor', 'admin']
         && d.get('email', '') is string && d.get('email', '').size() <= 254
-        && d.get('nombre', '') is string && d.get('nombre', '').size() <= 120;
+        && d.get('nombre', '') is string && d.get('nombre', '').size() <= 120
+        && d.get('terminosVersion', '') is string && d.get('terminosVersion', '').size() <= 32;
+    }
+    // Aceptación de los términos (terminosVersion + terminosAceptados): la escribe solo la propia persona y
+    // siempre con la hora real del servidor. Nadie más (ni un admin) puede marcarla o cambiarla por otra cuenta.
+    function terminosIntactos() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['terminosVersion', 'terminosAceptados']);
+    }
+    function aceptaTerminos() {
+      return request.resource.data.get('terminosVersion', '').size() > 0
+        && request.resource.data.get('terminosAceptados', null) == request.time;
     }
 
     // Resumen de la racha que publica cada estudiante (ver src/app/16-rachas-docente.js). Solo campos conocidos,
@@ -54,13 +64,15 @@ service cloud.firestore {
       // Cada cuenta nace como estudiante. Solo el correo semilla puede nacer como admin.
       allow create: if request.auth != null && request.auth.uid == u
         && usuarioValido(request.resource.data)
+        && ( !('terminosVersion' in request.resource.data || 'terminosAceptados' in request.resource.data) || aceptaTerminos() )
         && ( request.resource.data.rol == 'estudiante'
              || ( request.resource.data.rol == 'admin' && esAdminSemilla() ) );
-      // Nadie cambia su propio rol; un admin sí puede cambiar el de cualquiera
+      // Nadie cambia su propio rol; un admin sí puede cambiar el de cualquiera (pero no su aceptación de los términos)
       allow update: if request.auth != null && usuarioValido(request.resource.data) && (
-        esAdmin()
+        ( esAdmin() && terminosIntactos() )
         || ( request.auth.uid == u
-             && request.resource.data.rol == resource.data.rol ) );
+             && request.resource.data.rol == resource.data.rol
+             && ( terminosIntactos() || aceptaTerminos() ) ) );
       allow delete: if request.auth != null && ( request.auth.uid == u || esAdmin() );
     }
 

@@ -11,6 +11,8 @@ Esta versión es un proyecto **aparte** de la que ya funciona para los estudiant
 - **Admin**: panel para asignar roles y borrar cuentas. Cualquiera puede borrar su propia cuenta desde el Perfil.
 - **Inicio con carpetas de semestre**: cada semestre es una carpeta (promedio, materias y apuntes); al abrirla se ve una página del semestre con dos cajones: 1 Materias y 2 Mis apuntes por materia. La dirección es `#/semestre/ID`.
 - Logo nuevo.
+- **Términos de servicio y privacidad**: páginas `terminos.html` y `privacidad.html`. Al crear una cuenta con correo hay que marcar la casilla; con Google o con una cuenta que ya existía, Auren pide aceptarlos al entrar y no deja seguir sin hacerlo. La versión y la fecha aceptadas se guardan en `usuarios/{uid}` (`terminosVersion`, `terminosAceptados`) y se ven en Perfil → «Términos y privacidad». Si cambias los textos de forma importante, sube la versión en las dos páginas y en `TERMINOS_VERSION` (`src/app/17-terminos.js`): todos tendrán que aceptar de nuevo. **Hay que publicar las reglas nuevas de `firestore.rules`.**
+- **Cookies**: Auren no usa cookies de analítica, publicidad ni rastreo; solo guarda en el navegador la sesión, la caché para usarla sin internet y las preferencias, que son necesarias. Por eso no hay banner de cookies (está explicado en `privacidad.html#cookies`). Si algún día se agrega analítica, hay que pedir consentimiento antes de cargarla.
 
 ## Puesta en marcha (en este orden)
 1. **Repositorio nuevo en GitHub** y sube esta carpeta (sin `node_modules`).

@@ -1,8 +1,8 @@
 /* Auren — service worker (PWA)
    Sube el número de VERSION cuando quieras forzar que todos reciban cambios. */
-const VERSION = 'v12';
+const VERSION = 'v13';
 const CACHE = 'auren-' + VERSION;
-const BASE = ['/', '/firebase-init.js', '/tema-init.js', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/logo-64.png', '/icons/favicon-32.png'];
+const BASE = ['/', '/terminos.html', '/privacidad.html', '/firebase-init.js', '/tema-init.js', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/logo-64.png', '/icons/favicon-32.png'];
 
 /* Librerías externas que sí conviene guardar para abrir más rápido o sin internet */
 const CDN_OK = [
