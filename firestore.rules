@@ -482,6 +482,54 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---------- Ayuda: reportes de fallos y dudas (ver src/app/18-ayuda.js) ----------
+    // Contador de envíos de cada cuenta: solo sube de 1 en 1 y como mucho una vez por minuto (freno contra el spam).
+    match /reportesUso/{u} {
+      allow get: if request.auth != null && request.auth.uid == u;
+      allow create: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['n', 'ultimo'])
+        && request.resource.data.n == 1
+        && request.resource.data.ultimo == request.time;
+      allow update: if request.auth != null && request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['n', 'ultimo'])
+        && request.resource.data.n == resource.data.n + 1
+        && request.resource.data.ultimo == request.time
+        && request.time > resource.data.ultimo + duration.value(60, 's');
+      allow delete: if false;
+    }
+    // Cada reporte se llama {uid}_{n}, donde n es el contador que se sube en la MISMA escritura: así cada envío
+    // pasa por el freno de arriba. Solo campos conocidos, con tipo y tamaño máximo; nace siempre como "nuevo".
+    function reporteValido(id, d) {
+      return d.keys().hasOnly(['tipo', 'categoria', 'mensaje', 'pasos', 'uid', 'email', 'nombre', 'rol', 'pantalla', 'navegador', 'app', 'estado', 'creado'])
+        && d.keys().hasAll(['tipo', 'categoria', 'mensaje', 'uid', 'estado', 'creado'])
+        && d.tipo in ['fallo', 'duda']
+        && d.categoria is string && d.categoria.size() <= 40
+        && d.mensaje is string && d.mensaje.size() >= 10 && d.mensaje.size() <= 2000
+        && d.get('pasos', '') is string && d.get('pasos', '').size() <= 2000
+        && d.uid == request.auth.uid
+        && d.get('email', '') == request.auth.token.get('email', '')
+        && d.get('nombre', '') is string && d.get('nombre', '').size() <= 120
+        && d.get('rol', '') is string && d.get('rol', '').size() <= 20
+        && d.get('pantalla', '') is string && d.get('pantalla', '').size() <= 200
+        && d.get('navegador', '') is string && d.get('navegador', '').size() <= 300
+        && d.get('app', '') is string && d.get('app', '').size() <= 40
+        && d.estado == 'nuevo'
+        && d.creado == request.time
+        && getAfter(/databases/$(database)/documents/reportesUso/$(request.auth.uid)).data.ultimo == request.time
+        && id == request.auth.uid + '_' + string(getAfter(/databases/$(database)/documents/reportesUso/$(request.auth.uid)).data.n);
+    }
+    // Lo lee quien lo envió y los admin. Solo un admin cambia el estado o responde. Lo borran su autor o un admin.
+    match /reportes/{id} {
+      allow get, list: if request.auth != null && ( resource.data.uid == request.auth.uid || esAdmin() );
+      allow create: if request.auth != null && reporteValido(id, request.resource.data);
+      allow update: if esAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'respuesta', 'respondido'])
+        && request.resource.data.estado in ['nuevo', 'revisando', 'resuelto']
+        && request.resource.data.get('respuesta', '') is string && request.resource.data.get('respuesta', '').size() <= 2000
+        && ( !('respondido' in request.resource.data.diff(resource.data).affectedKeys()) || request.resource.data.respondido == request.time );
+      allow delete: if request.auth != null && ( resource.data.uid == request.auth.uid || esAdmin() );
+    }
+
     // Trabajos de IA en segundo plano. La función de Netlify escribe aquí el resultado usando el
     // token de la propia persona, así que solo puede tocar sus propios trabajos.
     match /iaJobs/{job} {

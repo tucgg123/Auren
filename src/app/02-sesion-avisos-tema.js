@@ -99,6 +99,7 @@ auth.onAuthStateChanged(async user=>{
     startShared();
     iniciarRachaPublica();
     iniciarAvisos();
+    revisarRespuestasReportes();                                     // ¿el equipo respondió un reporte o una duda? (18-ayuda.js)
     escucharNotas();
     escucharMisInvitaciones();
     try{avisarLogros(evaluarLogros())}catch(e){console.error('Logros:',e)}

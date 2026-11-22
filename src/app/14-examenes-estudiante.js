@@ -165,7 +165,7 @@ function viewExamenDocHTML(){
 function aplicarRolMenu(){
   const prof=esProfesor();
   document.body.classList.toggle('modoProfe',prof);
-  const visibles=esAdmin()?['docente','admin','perfil']:prof?['docente','perfil']:['materias','calendario','logros','perfil'];
+  const visibles=esAdmin()?['docente','admin','perfil','ayuda']:prof?['docente','perfil','ayuda']:['materias','calendario','logros','perfil','ayuda'];
   document.querySelectorAll('#mainNav [data-nav]').forEach(b=>{b.style.display=visibles.includes(b.dataset.nav)?'':'none'});
   const d=document.querySelector('#mainNav [data-nav="docente"]');if(d)d.textContent='🏫 Mis materias';
   const ct=$('ctTxt');if(ct)ct.textContent=esAdmin()?'Auren · Admin':prof?'Auren · Docente':'Auren';

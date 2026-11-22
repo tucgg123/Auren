@@ -16,14 +16,14 @@ function rutaAHash(r){
   if(v==='docExamen'&&r.materiaId&&r.examId)return '#/examen/'+r.materiaId+'/'+r.examId;
   if(v==='docResultados'&&r.materiaId&&r.examId)return '#/resultados/'+r.materiaId+'/'+r.examId;
   if(v==='examenDoc'&&r.materiaId&&r.examId)return '#/presentar/'+r.materiaId+'/'+r.examId;
-  if(['calendario','logros','perfil','docente','admin'].includes(v))return '#/'+v;
+  if(['calendario','logros','perfil','docente','admin','ayuda'].includes(v))return '#/'+v;
   return '#/';
 }
 function hashARuta(h){
   const p=String(h||'').replace(/^#\/?/,'').split('/');
   const a=p[0]||'',b=p[1],c=p[2];
   if(a==='')return{view:'materias',materiaId:null};
-  if(['calendario','logros','perfil','docente','admin'].includes(a))return{view:a,materiaId:null};
+  if(['calendario','logros','perfil','docente','admin','ayuda'].includes(a))return{view:a,materiaId:null};
   if(a==='semestre'&&b)return{view:'materias',materiaId:null,semId:b};
   if(a==='materia'&&b)return{view:'materiaDetail',materiaId:b};
   if(a==='estudio'&&b&&c&&HERRAMIENTAS.includes(b))return{view:'tool',tool:b,materiaId:c};
@@ -40,7 +40,7 @@ function sincronizarHash(){
   try{if(reemplazarHash){history.replaceState(null,'',h);reemplazarHash=false}else history.pushState(null,'',h)}catch(e){}
 }
 function marcarNavSegunRuta(){
-  const top=['materias','docente','admin','calendario','logros','perfil'].includes(route.view)?route.view:(esProfesor()?'docente':'materias');
+  const top=['materias','docente','admin','calendario','logros','perfil','ayuda'].includes(route.view)?route.view:(esProfesor()?'docente':'materias');
   document.querySelectorAll('#mainNav button').forEach(x=>x.classList.toggle('on',x.dataset.nav===top));
 }
 /* Al abrir la app con un enlace (por ejemplo #/materia/ID) se entra directo a esa pantalla, si existe y puedes verla */
@@ -49,7 +49,7 @@ function rutaInicialDesdeHash(){
   const r=hashARuta(location.hash);
   if(r&&r.view==='materias'&&r.semId&&state.semesters.some(s=>s.id===r.semId&&!s.oculto)&&!esProfesor()){route={view:'materias',materiaId:null,semId:r.semId};return}
   if(!r||r.view==='materias')return;
-  if(['calendario','logros','perfil','docente','admin'].includes(r.view)){route={view:r.view,materiaId:null};return}
+  if(['calendario','logros','perfil','docente','admin','ayuda'].includes(r.view)){route={view:r.view,materiaId:null};return}
   const m=r.materiaId&&state.materias.find(x=>x.id===r.materiaId);
   if(m)route={view:'materiaDetail',materiaId:m.id};
 }
@@ -143,11 +143,12 @@ function morph(destino,html){
   tpl.innerHTML=html;
   morphHijos(destino,tpl.content);
 }
-const VISTAS_MORPH=['materias','materiaDetail','perfil','docente','logros','docResultados','examenDoc','calendario','docExamen'];
+const VISTAS_MORPH=['materias','materiaDetail','perfil','docente','logros','docResultados','examenDoc','calendario','docExamen','ayuda'];
 
 function render(keep){
   const _y=window.scrollY;
   guardarRuta();
+  ayudaRecordarPantalla();                                     // para el reporte de fallos: la última pantalla antes de Ayuda
   sincronizarHash();
   if(route.view!=='tool')clearRepasoTimer();
   if(route.view!=='examenDoc')clearExTimer();
@@ -164,6 +165,7 @@ function render(keep){
   else if(route.view==='examenDoc')html=viewExamenDocHTML();
   else if(route.view==='docente')html=viewDocenteHTML();
   else if(route.view==='logros')html=viewLogrosHTML();
+  else if(route.view==='ayuda')html=viewAyudaHTML();
   else html=view.innerHTML;
   /* Misma pantalla → repintado incremental. Pantalla nueva o cuestionario/tarjetas (que dependen de sus animaciones) → completo. */
   if(VISTAS_MORPH.includes(route.view)&&claveVista()===ultimaVista&&view.firstElementChild)morph(view,html);

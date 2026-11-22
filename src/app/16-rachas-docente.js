@@ -46,7 +46,7 @@ async function publicarRacha(){
   }
 }
 function iniciarRachaPublica(){rachaSesion=true;rachaPub.clear();publicarRacha()}
-function detenerRachaPublica(){rachaSesion=false;rachaPub.clear();Object.keys(rachasMat).forEach(k=>delete rachasMat[k]);adminRachas=null;adminTab='cuentas'}
+function detenerRachaPublica(){rachaSesion=false;rachaPub.clear();Object.keys(rachasMat).forEach(k=>delete rachasMat[k]);adminRachas=null;adminTab='cuentas';adminReportes=null;misReportes=null;ayudaTab='faq';ayudaBuscar=''}
 /* Al salirse de una materia de docente, el estudiante borra su resumen de esa materia */
 async function borrarRachaMateria(sid){
   if(!currentUid||!sid)return;
@@ -171,7 +171,7 @@ function filasRachaAdmin(){
   return filas.filter(x=>!f||String(x.email).toLowerCase().includes(f)||String(x.nombre).toLowerCase().includes(f)).sort(ordenRachas);
 }
 function adminTabsHTML(){
-  return `<div class="tabsT" style="margin:10px 0 14px">${[['cuentas','👤 Cuentas'],['rachas','🔥 Rachas de estudiantes']].map(([k,t])=>`<button type="button" data-action="adminTab" data-tab="${k}" class="${adminTab===k?'on':''}">${t}</button>`).join('')}</div>`;
+  return `<div class="tabsT" style="margin:10px 0 14px">${[['cuentas','👤 Cuentas'],['rachas','🔥 Rachas de estudiantes'],['reportes','📨 Reportes'+(adminReportes&&adminReportesAbiertos()?' ('+adminReportesAbiertos()+')':'')]].map(([k,t])=>`<button type="button" data-action="adminTab" data-tab="${k}" class="${adminTab===k?'on':''}">${t}</button>`).join('')}</div>`;
 }
 function adminRachasHTML(){
   if(adminLista===null&&!adminCargando)setTimeout(cargarUsuariosAdmin,0);
@@ -190,7 +190,7 @@ document.addEventListener('click',e=>{
   if(a==='rachasRecargar'&&m&&m.rol==='docente')cargarRachasMateria(m);
   else if(a==='rachasExcel'&&m&&m.rol==='docente')
     descargarRachasXlsx(filasRachaMateria(m),m.name,'_rachas.xlsx').catch(err=>{console.error(err);UI.alerta('No se pudo crear el Excel'+detalleError(err)+'.')});
-  else if(a==='adminTab'&&esAdmin()){adminTab=b.dataset.tab==='rachas'?'rachas':'cuentas';render(true)}
+  else if(a==='adminTab'&&esAdmin()){adminTab=['rachas','reportes'].includes(b.dataset.tab)?b.dataset.tab:'cuentas';render(true)}
   else if(a==='rachasExcelAdmin'&&esAdmin())
     descargarRachasXlsx(filasRachaAdmin(),'Auren','_rachas_estudiantes.xlsx').catch(err=>{console.error(err);UI.alerta('No se pudo crear el Excel'+detalleError(err)+'.')});
 });
