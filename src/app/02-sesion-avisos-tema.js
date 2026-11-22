@@ -333,6 +333,18 @@ function setColores(cambio,repintar){
   applyColors();if(currentUid)persist();
   if(repintar)render(true);
 }
+/* Selector libre: una rueda de colores (abre el selector del sistema) y un campo para escribir el código, p. ej. #3366ff */
+function normHex(v){
+  v=String(v||'').trim().toLowerCase();if(v&&v[0]!=='#')v='#'+v;
+  if(/^#[0-9a-f]{3}$/.test(v))v='#'+v[1]+v[1]+v[2]+v[2]+v[3]+v[3];
+  return HEXRX.test(v)?v:null;
+}
+function colorLibreHTML(accion,extra,valor,titulo,activo,aria){
+  return `<div class="colorLibre${activo?' on':''}">
+    <label class="colorRueda" style="--sw:${valor}" title="${esc(aria)}"><input type="color" data-action="${accion}" ${extra} value="${valor}" aria-label="${esc(aria)}"><span class="ruedaIco" aria-hidden="true"></span><span>${esc(titulo)}</span></label>
+    <input class="fld hexFld" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="7" data-action="${accion}" data-hex="1" ${extra} value="${valor}" placeholder="#3366ff" aria-label="${esc(aria)} (código)">
+  </div>`;
+}
 function coloresCardHTML(){
   const c=state.colors||{},ac=c.acento||null,fo=c.fondo||null,osc=temaEfectivo()==='dark';
   const swA=(v,n)=>`<button type="button" class="colorSw${v?'':' def'}${(v||null)===ac?' on':''}" ${v?`style="--sw:${v}"`:''} data-action="colAcento" data-v="${v||''}" aria-label="${esc(n)}" aria-pressed="${(v||null)===ac}" title="${esc(n)}"></button>`;
@@ -346,15 +358,15 @@ function coloresCardHTML(){
     if(fo&&window.aurenColores&&window.aurenColores.contraste(fm,txt)<4.5)aviso=`<p class="meta" style="color:var(--no);margin:8px 0 0">⚠️ Con este fondo el texto del modo ${osc?'oscuro':'claro'} se lee mal. Prueba un color ${osc?'más oscuro':'más claro'}.</p>`;
   }catch(e){}
   return `<div class="card"><h3>🎨 Colores</h3>
-    <p class="meta" style="margin-top:0">Elige el color de los botones y resaltados, y el color de fondo de la página. Se guarda en tu cuenta y te sigue en cualquier dispositivo.</p>
+    <p class="meta" style="margin-top:0">Elige el color de los botones y resaltados, y el color de fondo de la página. Toca la rueda 🎨 para escoger cualquier color o escribe su código (por ejemplo #3366ff). Se guarda en tu cuenta y te sigue en cualquier dispositivo.</p>
     <label class="lbl">Color de acento</label>
     <div class="colorGrid" role="group" aria-label="Color de acento">${swA(null,'Original (terracota)')}${ACENTOS.map(x=>swA(x[0],x[1])).join('')}</div>
-    <div class="colorPick"><label>Otro color <input type="color" class="${ac&&!ACENTOS.some(x=>x[0]===ac)?'on':''}" data-action="colAcentoLibre" value="${acHex}" aria-label="Elegir otro color de acento"></label></div>
+    ${colorLibreHTML('colAcentoLibre','',acHex,'Cualquier color',ac&&!ACENTOS.some(x=>x[0]===ac),'Elegir cualquier color de acento')}
     <label class="lbl" style="margin-top:16px">Color de fondo</label>
     <div class="colorGrid" role="group" aria-label="Color de fondo"><button type="button" class="colorSw fondoSw def${fo?'':' on'}" data-action="colFondo" data-c="" data-o="" aria-label="Fondo original" aria-pressed="${!fo}" title="Original"></button>${FONDOS.map(swF).join('')}</div>
-    <div class="colorPick">
-      <label>Modo claro <input type="color" class="${fo&&!FONDOS.some(fSel)?'on':''}" data-action="colFondoLibre" data-m="claro" value="${fActual.claro}" aria-label="Color de fondo para el modo claro"></label>
-      <label>Modo oscuro <input type="color" class="${fo&&!FONDOS.some(fSel)?'on':''}" data-action="colFondoLibre" data-m="oscuro" value="${fActual.oscuro}" aria-label="Color de fondo para el modo oscuro"></label>
+    <div class="colorLibres">
+      ${colorLibreHTML('colFondoLibre','data-m="claro"',fActual.claro,'Modo claro',fo&&!FONDOS.some(fSel),'Elegir cualquier color de fondo para el modo claro')}
+      ${colorLibreHTML('colFondoLibre','data-m="oscuro"',fActual.oscuro,'Modo oscuro',fo&&!FONDOS.some(fSel),'Elegir cualquier color de fondo para el modo oscuro')}
     </div>${aviso}
     <div class="colorPrev"><button type="button" class="pr" tabindex="-1">Botón</button><span class="chip" style="color:var(--a);border-color:var(--a)">Etiqueta</span><span style="color:var(--a);font-weight:600">Texto resaltado</span></div>
     <div class="row"><button class="sec" data-action="colReset" ${state.colors?'':'disabled'}>↺ Volver a los colores originales</button></div></div>`;
@@ -401,4 +413,12 @@ $('themeBtn').onclick=()=>{
 };
 /* Hecho por Sebastián Poveda y Santiago Romero. 2026 — Auren · estilos */
 /* Al soltar el selector de color se repinta el perfil para marcar la muestra elegida y revisar el contraste */
-document.addEventListener('change',e=>{const a=e.target&&e.target.dataset&&e.target.dataset.action;if(a==='colAcentoLibre'||a==='colFondoLibre')render(true)});
+document.addEventListener('change',e=>{
+  const a=e.target&&e.target.dataset&&e.target.dataset.action;if(a!=='colAcentoLibre'&&a!=='colFondoLibre')return;
+  if(e.target.dataset.hex){                                              // el repintado conserva lo escrito: se deja el código ya normalizado
+    const v=normHex(e.target.value);
+    if(v)e.target.value=v;
+    else{toast('Escribe un código de color como #3366ff');const c=state.colors||{};e.target.value=a==='colAcentoLibre'?(c.acento||e.target.defaultValue):((c.fondo||FONDO_DEF)[e.target.dataset.m]||e.target.defaultValue)}
+  }
+  render(true);
+});
