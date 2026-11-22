@@ -51,6 +51,16 @@ let html = fs.readFileSync(ruta, 'utf8');
 html = html.replace(/assets\/app\.[0-9a-f]{8}\.js/, 'assets/' + js).replace(/assets\/styles\.[0-9a-f]{8}\.css/, 'assets/' + css);
 fs.writeFileSync(ruta, html);
 
+// Páginas de términos y privacidad: usan los mismos estilos y el correo de contacto es el de auren.config.json
+for (const pagina of ['terminos.html', 'privacidad.html']) {
+  const rp = path.join(raiz, pagina);
+  if (!fs.existsSync(rp)) continue;
+  const txt = fs.readFileSync(rp, 'utf8')
+    .replace(/assets\/styles\.[0-9a-f]{8}\.css/, 'assets/' + css)
+    .replace(/(<a class="contacto" href="mailto:)[^"]*(">)[^<]*(<\/a>)/g, '$1' + adminEmail + '$2' + adminEmail + '$3');
+  fs.writeFileSync(rp, txt);
+}
+
 // Reglas de Firestore: el correo del primer admin sale de auren.config.json
 const rutaReglas = path.join(raiz, 'firestore.rules');
 const reglas = fs.readFileSync(rutaReglas, 'utf8');

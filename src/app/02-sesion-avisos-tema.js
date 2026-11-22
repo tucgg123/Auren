@@ -5,6 +5,7 @@ document.querySelectorAll('[data-authtab]').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('[data-authtab]').forEach(x=>x.classList.toggle('on',x===b));
   $('authSubmit').textContent=authMode==='login'?'Iniciar sesión':'Crear cuenta';
   $('authPass').autocomplete=authMode==='login'?'current-password':'new-password';   // el navegador propone una contraseña fuerte al registrarse
+  $('authTermsRow').hidden=authMode==='login';                                          // al crear la cuenta hay que aceptar los términos
   $('authError').hidden=true;
 });
 function mapAuthError(err){
@@ -34,14 +35,19 @@ $('authForm').addEventListener('submit',async e=>{
   if(authMode!=='login'&&(pass.length<8||!/[A-Za-z]/.test(pass)||!/[0-9]/.test(pass))){
     $('authError').textContent='La contraseña debe tener al menos 8 caracteres, con letras y números.';$('authError').hidden=false;return;
   }
+  if(authMode!=='login'&&!$('authTerms').checked){
+    $('authError').textContent='Para crear la cuenta tienes que aceptar los Términos de servicio y la Política de privacidad.';$('authError').hidden=false;return;
+  }
   $('authSubmit').disabled=true;
   try{
     if(authMode==='login') await auth.signInWithEmailAndPassword(email,pass);
     else{
+      terminosAlRegistrar=true;                                       // ya marcó la casilla: se guarda la aceptación sin volver a preguntar
       const cred=await auth.createUserWithEmailAndPassword(email,pass);
       try{await cred.user.sendEmailVerification()}catch(e){console.warn('No se pudo enviar el correo de verificación:',e)}   // confirma que el correo es suyo
     }
   }catch(err){
+    terminosAlRegistrar=false;
     $('authError').textContent=mapAuthError(err);$('authError').hidden=false;
   }finally{
     $('authSubmit').disabled=false;
@@ -81,6 +87,7 @@ auth.onAuthStateChanged(async user=>{
     if(!state.profile.name&&user.displayName){state.profile.name=user.displayName;persist()}
     await cargarRolServidor(user);                                   // el rol sale de Firestore, no de lo que la persona elija
     $('authLoading').hidden=true;
+    if(!await asegurarTerminos(user))return;                         // sin aceptar los términos vigentes no se entra (ver 17-terminos.js)
     $('authScreen').hidden=true;
     $('appRoot').hidden=false;
     if(!state.theme&&temaLocal()){state.theme=temaLocal();persist()}   // lo elegido antes de iniciar sesión pasa a la cuenta
@@ -98,6 +105,7 @@ auth.onAuthStateChanged(async user=>{
     procesarUnirsePendiente();
   }else{
     const ovRol=document.getElementById('rolOverlay');if(ovRol)ovRol.remove();
+    cerrarTerminosGate();
     stopShared();
     detenerRachaPublica();
     currentUid=null;

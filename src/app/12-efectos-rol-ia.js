@@ -126,15 +126,17 @@ async function cargarRolServidor(user){
   const ref=db.collection('usuarios').doc(user.uid);
   const semilla=String(user.email||'').toLowerCase()===ADMIN_SEMILLA&&user.emailVerified===true;
   let rol='estudiante';
-  rolFalloLectura=false;
+  rolFalloLectura=false;cuentaDatos=null;
   try{
     const d=await ref.get();
     if(d.exists&&ROLES.includes((d.data()||{}).rol)){
+      cuentaDatos=d.data();                                           // también trae la aceptación de los términos (17-terminos.js)
       rol=d.data().rol;
       if(semilla&&rol!=='admin'){await ref.update({rol:'admin'});rol='admin'}      // el primer admin recupera su rol aunque se haya registrado antes de verificar el correo
     }else{
       rol=semilla?'admin':'estudiante';
       await ref.set({rol,email:user.email||'',nombre:user.displayName||'',creado:firebase.firestore.FieldValue.serverTimestamp()});
+      cuentaDatos={rol};
     }
   }catch(e){
     console.error('No se pudo leer el rol de la cuenta:',e);rolFalloLectura=true;

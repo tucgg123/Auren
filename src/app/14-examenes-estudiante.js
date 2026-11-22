@@ -204,6 +204,7 @@ function viewPerfilDocenteHTML(){
     ${dwHTML('pf:fx','Efectos visuales','Fondo animado y ahorro de batería',fxCardHTML(),'✨')}
     ${dwHTML('pf:datos','Tus datos','Descarga una copia de respaldo',datosCardHTML(),'💾')}
     ${dwHTML('pf:rol','Tu rol',esc(nombreRol(p.rol||'estudiante')),rolCardHTML(),'🎓')}
+    ${dwHTML('pf:legal','Términos y privacidad','Lo que aceptaste y cómo usamos tus datos',terminosCardHTML(),'📄')}
     ${dwHTML('pf:cuenta','Cuenta',esc(auth.currentUser&&auth.currentUser.email||''),`
       <p class="meta" style="margin-top:0">Conectado como <b>${esc(auth.currentUser&&auth.currentUser.email||'')}</b></p>
       <button class="sec" data-action="logout">🚪 Cerrar sesión</button> <button class="sec" data-action="borrarCuenta" style="color:var(--no)">🗑️ Eliminar mi cuenta</button>`,'🔑')}`;
