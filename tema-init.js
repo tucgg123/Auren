@@ -18,7 +18,7 @@
   }
   function contraste(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
   /* Acerca el color hacia blanco (modo oscuro) o negro (modo claro) hasta que se lea bien sobre el fondo.
-     En oscuro se pide más contraste para que quede en tono pastel, como el acento original. */
+     Solo se ajusta lo justo para cumplir el contraste mínimo, así el color se parece lo más posible al elegido. */
   function legible(c, fondo, oscuro, min) {
     var meta = oscuro ? [255, 255, 255] : [0, 0, 0], p = 0, r = c;
     while (contraste(r, fondo) < min && p < 0.9) { p += 0.05; r = mezcla(c, meta, p); }
@@ -29,7 +29,7 @@
     if (t === 'dark' || t === 'light') return t === 'dark';
     return !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   }
-  var VARS = ['--a', '--al', '--glow', '--on', '--bg', '--ubg'];
+  var VARS = ['--a', '--al', '--glow', '--on', '--bg', '--ubg', '--c', '--panel', '--solid', '--glass'];
 
   /* colores = { acento: '#rrggbb' | null, fondo: { claro: '#rrggbb', oscuro: '#rrggbb' } | null } */
   function aplicar(colores) {
@@ -43,9 +43,15 @@
       fondoBase = rgb(f);
       s.setProperty('--bg', f); s.setProperty('--ubg', f);
       html.setAttribute('data-bgc', '');
+      /* En modo oscuro las tarjetas eran azul marino fijo: ahora toman un tono un poco más claro del fondo elegido */
+      if (osc) {
+        var t = mezcla(fondoBase, [255, 255, 255], 0.06), tr = t.map(Math.round).join(',');
+        s.setProperty('--c', 'rgba(' + tr + ',.8)'); s.setProperty('--panel', 'rgba(' + tr + ',.8)');
+        s.setProperty('--glass', 'rgba(' + tr + ',.9)'); s.setProperty('--solid', hex(t));
+      }
     }
     if (colores.acento && HEX.test(colores.acento)) {
-      var a = legible(rgb(colores.acento), fondoBase, osc, osc ? 6.5 : 3.5), ac = hex(a), r = a.map(Math.round).join(',');
+      var a = legible(rgb(colores.acento), fondoBase, osc, osc ? 4.5 : 3.5), ac = hex(a), r = a.map(Math.round).join(',');
       s.setProperty('--a', ac);
       s.setProperty('--al', 'rgba(' + r + ',' + (osc ? '.14' : '.1') + ')');
       s.setProperty('--glow', 'rgba(' + r + ',' + (osc ? '.18' : '.14') + ')');

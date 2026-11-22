@@ -349,12 +349,12 @@ function coloresCardHTML(){
     <p class="meta" style="margin-top:0">Elige el color de los botones y resaltados, y el color de fondo de la página. Se guarda en tu cuenta y te sigue en cualquier dispositivo.</p>
     <label class="lbl">Color de acento</label>
     <div class="colorGrid" role="group" aria-label="Color de acento">${swA(null,'Original (terracota)')}${ACENTOS.map(x=>swA(x[0],x[1])).join('')}</div>
-    <div class="colorPick"><label>Otro color <input type="color" data-action="colAcentoLibre" value="${acHex}" aria-label="Elegir otro color de acento"></label></div>
+    <div class="colorPick"><label>Otro color <input type="color" class="${ac&&!ACENTOS.some(x=>x[0]===ac)?'on':''}" data-action="colAcentoLibre" value="${acHex}" aria-label="Elegir otro color de acento"></label></div>
     <label class="lbl" style="margin-top:16px">Color de fondo</label>
     <div class="colorGrid" role="group" aria-label="Color de fondo"><button type="button" class="colorSw fondoSw def${fo?'':' on'}" data-action="colFondo" data-c="" data-o="" aria-label="Fondo original" aria-pressed="${!fo}" title="Original"></button>${FONDOS.map(swF).join('')}</div>
     <div class="colorPick">
-      <label>Modo claro <input type="color" data-action="colFondoLibre" data-m="claro" value="${fActual.claro}" aria-label="Color de fondo para el modo claro"></label>
-      <label>Modo oscuro <input type="color" data-action="colFondoLibre" data-m="oscuro" value="${fActual.oscuro}" aria-label="Color de fondo para el modo oscuro"></label>
+      <label>Modo claro <input type="color" class="${fo&&!FONDOS.some(fSel)?'on':''}" data-action="colFondoLibre" data-m="claro" value="${fActual.claro}" aria-label="Color de fondo para el modo claro"></label>
+      <label>Modo oscuro <input type="color" class="${fo&&!FONDOS.some(fSel)?'on':''}" data-action="colFondoLibre" data-m="oscuro" value="${fActual.oscuro}" aria-label="Color de fondo para el modo oscuro"></label>
     </div>${aviso}
     <div class="colorPrev"><button type="button" class="pr" tabindex="-1">Botón</button><span class="chip" style="color:var(--a);border-color:var(--a)">Etiqueta</span><span style="color:var(--a);font-weight:600">Texto resaltado</span></div>
     <div class="row"><button class="sec" data-action="colReset" ${state.colors?'':'disabled'}>↺ Volver a los colores originales</button></div></div>`;
