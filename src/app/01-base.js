@@ -566,6 +566,7 @@ function viewAdminHTML(){
   const n=r=>L.filter(u=>u.rol===r).length;
   const cab=`<div class="viewhead"><h1>🛡️ Administración</h1><button class="sec" data-action="adminRecargar">↻ Actualizar</button></div>${adminTabsHTML()}`;
   if(adminTab==='rachas')return cab+adminRachasHTML();
+  if(adminTab==='reportes')return cab+adminReportesHTML();
   return cab+`
   <p class="meta">${L.length} cuentas · ${n('estudiante')} estudiantes · ${n('profesor')} profesores · ${n('admin')} admin. Aquí asignas roles y borras cuentas.</p>
   <input class="fld" type="search" data-action="adminFiltro" placeholder="Buscar por nombre o correo" value="${esc(adminFiltro)}" aria-label="Buscar cuentas">
@@ -627,6 +628,7 @@ async function borrarMiCuenta(){
     await borrarColeccionPropia('users/'+uidViejo+'/materias');
     await db.collection('users').doc(uidViejo).delete();
     await db.collection('rachas').doc(uidViejo).delete().catch(e=>console.warn('No se pudo borrar el resumen de racha:',e));
+    await borrarMisReportes(uidViejo).catch(e=>console.warn('No se pudieron borrar los reportes de Ayuda:',e));
     await db.collection('usuarios').doc(uidViejo).delete();
     await u.delete();
   }catch(e){

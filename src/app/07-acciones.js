@@ -146,7 +146,7 @@ document.addEventListener('click',async e=>{
   else if(a==='pomoReset'){pomoReiniciar()}
   else if(a==='pomoSkip'){pomoSaltar()}
   else if(a==='borrarCuenta'){borrarMiCuenta()}
-  else if(a==='adminRecargar'){adminLista=null;adminError='';if(adminTab==='rachas')adminRachas=null;render(true)}
+  else if(a==='adminRecargar'){adminLista=null;adminError='';if(adminTab==='rachas')adminRachas=null;if(adminTab==='reportes')adminReportes=null;render(true)}
   else if(a==='adminBorrar'){borrarCuentaAjena(b.dataset.uid)}
   else if(a==='notaEsquema'){const tm=miTema(b.dataset.id),ta=document.querySelector('textarea[data-tema="'+b.dataset.id+'"]');if(tm&&ta){const e=esquemaTexto(tm);if(e){ta.value=(ta.value.trim()?ta.value.replace(/\s+$/,'')+'\n\n':'')+e;programarNota(tm.id,tm.materiaId,ta.value)}}}
   else if(a==='ttsNota'){const tm=miTema(b.dataset.id);if(tm)ttsLeer('Mis apuntes: '+tm.title,textoNota(tm.id))}
@@ -166,6 +166,7 @@ document.addEventListener('click',async e=>{
     const x=avCargar().lista.find(v=>v.id===b.dataset.av);$('avisosPanel').hidden=true;
     const mm=x&&x.materiaId&&state.materias.find(v=>v.id===x.materiaId);
     if(mm){route={view:'materiaDetail',materiaId:mm.id};document.querySelectorAll('#mainNav button').forEach(v=>v.classList.toggle('on',v.dataset.nav==='materias'));render()}
+    else if(x&&x.tipo==='ayuda'){ayudaTab='mis';misReportes=null;goToView('ayuda')}       // respuesta a un reporte o duda (18-ayuda.js)
   }
   else if(a==='avToggle'){mutate(s=>{s.profile.avisos=s.profile.avisos===false});if(avisosActivos())revisarRecordatorios()}
   else if(a==='avPermiso'){

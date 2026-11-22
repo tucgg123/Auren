@@ -66,6 +66,26 @@ async function borrarSubcoleccion(ruta, tok) {
   return n;
 }
 
+// Reportes de fallos y dudas que envió la cuenta (reportes/{uid}_{n}): se buscan por su campo uid
+async function borrarReportes(uid, tok) {
+  let n = 0;
+  for (let i = 0; i < 10; i++) {                                  // tope de seguridad: 10 tandas de 100
+    const r = await fetch(DOCS() + ':runQuery', {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok },
+      body: JSON.stringify({ structuredQuery: {
+        from: [{ collectionId: 'reportes' }],
+        where: { fieldFilter: { field: { fieldPath: 'uid' }, op: 'EQUAL', value: { stringValue: uid } } },
+        limit: 100
+      } })
+    });
+    if (!r.ok) throw new Error('No se pudieron buscar los reportes (' + r.status + ')');
+    const docs = (await r.json()).filter(x => x.document).map(x => x.document.name.split('/documents/')[1]);
+    for (const ruta of docs) { await borrarDoc(ruta, tok); n++; }
+    if (docs.length < 100) break;
+  }
+  return n;
+}
+
 exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Método no permitido.' });
   if (!FIREBASE_API_KEY || !PROYECTO) return json(500, { error: 'Falta configurar FIREBASE_API_KEY y FIREBASE_PROJECT_ID en Netlify.' });
@@ -104,7 +124,8 @@ exports.handler = async event => {
       anotaciones: await borrarSubcoleccion('anotaciones/' + uid + '/items', tok),
       banco: await borrarSubcoleccion('bancoPreguntas/' + uid + '/items', tok),
       // El cuaderno se guarda por materia en users/{uid}/materias: borrar solo users/{uid} dejaba esas materias huérfanas
-      materias: await borrarSubcoleccion('users/' + uid + '/materias', tok)
+      materias: await borrarSubcoleccion('users/' + uid + '/materias', tok),
+      reportes: await borrarReportes(uid, tok)
     };
     await borrarDoc('users/' + uid, tok);
     await borrarDoc('usuarios/' + uid, tok);
@@ -112,6 +133,7 @@ exports.handler = async event => {
     await borrarDoc('iaUso/' + uid, tok);
     await borrarDoc('iaChat/' + uid, tok);
     await borrarDoc('iaHora/' + uid, tok);
+    await borrarDoc('reportesUso/' + uid, tok);
     return json(200, { ok: true, borrados });
   } catch (e) {
     console.error('Borrado de cuenta:', e);
